@@ -1,8 +1,9 @@
-"""持久化配置管理
+"""???????
 
-使用 data/settings.json 存储可通过管理面板修改的设置：
-  - proxy_target_url / proxy_api_key: 可覆盖环境变量的全局配置
-  - model_mappings: Cursor 模型名 → {upstream_model, backend, target_url, api_key, custom_instructions}
+?? data/settings.json ???????????????
+  - proxy_target_url / proxy_api_key: ????????????
+  - relay_profiles / active_relay: ??????????????
+  - model_mappings: Cursor ??? -> {upstream_model, backend, relay_profile, ...}
 """
 
 import copy
@@ -23,21 +24,46 @@ _DEFAULTS = {
     'proxy_target_url': '',
     'proxy_api_key': '',
     'debug_mode': '',
+    'active_relay': '',
+    'relay_profiles': {},
     'model_mappings': {},
 }
 
 
-def load():
-    """从持久化文件读取配置并刷新内存缓存。
+def _normalize_settings(data):
+    normalized = {**_DEFAULTS, **(data or {})}
+    relay_profiles = normalized.get('relay_profiles')
+    if not isinstance(relay_profiles, dict):
+        relay_profiles = {}
 
-    如果配置文件不存在或内容损坏，会回退到默认值，保证服务仍然可以正常启动。
+    clean_relays = {}
+    for raw_name, raw_profile in relay_profiles.items():
+        name = str(raw_name or '').strip()
+        if not name or not isinstance(raw_profile, dict):
+            continue
+        clean_relays[name] = {
+            'name': name,
+            'base_url': str(raw_profile.get('base_url', '') or '').strip(),
+            'api_key': str(raw_profile.get('api_key', '') or ''),
+        }
+
+    normalized['relay_profiles'] = clean_relays
+    active_relay = str(normalized.get('active_relay', '') or '').strip()
+    normalized['active_relay'] = active_relay if active_relay in clean_relays else ''
+    return normalized
+
+
+def load():
+    """??????????????????
+
+    ????????????????????????????????????
     """
     global _cache
     with _lock:
         if os.path.exists(SETTINGS_FILE):
             try:
                 with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
-                    _cache = {**_DEFAULTS, **json.load(f)}
+                    _cache = _normalize_settings(json.load(f))
             except (json.JSONDecodeError, OSError):
                 _cache = copy.deepcopy(_DEFAULTS)
         else:
@@ -46,20 +72,20 @@ def load():
 
 
 def save(data):
-    """将当前配置写回到持久化文件并同步缓存。
+    """???????????????????
 
-    保存前会确保数据目录存在，并始终以默认配置为基底合并缺失字段。
+    ???????????????????????????????
     """
     global _cache
     with _lock:
         os.makedirs(DATA_DIR, exist_ok=True)
-        _cache = {**_DEFAULTS, **data}
+        _cache = _normalize_settings(data)
         with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
             json.dump(_cache, f, ensure_ascii=False, indent=2)
 
 
 def get():
-    """获取当前配置的深拷贝快照，保证调用方修改不影响缓存。"""
+    """??????????????????????????"""
     with _lock:
         if _cache is None:
             pass
@@ -68,38 +94,73 @@ def get():
     return load()
 
 
+def get_relay_profiles():
+    """????????????"""
+    return get().get('relay_profiles', {})
+
+
+def get_active_relay_name():
+    """?????????????"""
+    return str(get().get('active_relay', '') or '').strip()
+
+
+def get_active_relay():
+    """??????????????????? None?"""
+    current = get()
+    name = str(current.get('active_relay', '') or '').strip()
+    relay = current.get('relay_profiles', {}).get(name)
+    if not relay:
+        return None
+    return {'name': name, **relay}
+
+
+def _resolve_global_target(current=None):
+    current = current or get()
+    relay_profiles = current.get('relay_profiles', {})
+    active_name = str(current.get('active_relay', '') or '').strip()
+    active = relay_profiles.get(active_name, {}) if active_name else {}
+    url = str(active.get('base_url', '') or current.get('proxy_target_url') or Config.PROXY_TARGET_URL).strip()
+    api_key = str(active.get('api_key', '') or current.get('proxy_api_key') or Config.PROXY_API_KEY)
+    return url, api_key
+
+
 def get_url():
-    """获取当前生效的上游 URL，优先使用持久化配置。"""
-    return get().get('proxy_target_url') or Config.PROXY_TARGET_URL
+    """????????? URL?????????????"""
+    return _resolve_global_target(get())[0]
 
 
 def get_key():
-    """获取当前生效的 API 密钥，优先使用持久化配置。"""
-    return get().get('proxy_api_key') or Config.PROXY_API_KEY
+    """??????? API ???????????????"""
+    return _resolve_global_target(get())[1]
 
 
 def get_debug_mode():
-    """获取当前生效的调试模式，优先使用持久化配置。"""
+    """??????????????????????"""
     mode = (get().get('debug_mode') or '').strip().lower()
     return mode if mode in ('off', 'simple', 'verbose') else Config.DEBUG_MODE
 
 
 def resolve_model(model_name):
-    """解析模型映射并返回完整的上游路由信息。"""
-    settings = get()
-    mappings = settings.get('model_mappings', {})
-    base_url, base_key = get_url(), get_key()
+    """???????????????????"""
+    current = get()
+    mappings = current.get('model_mappings', {})
+    relay_profiles = current.get('relay_profiles', {})
+    base_url, base_key = _resolve_global_target(current)
 
     if model_name in mappings:
         m = mappings[model_name]
         backend = m.get('backend')
         if backend in ('', None, 'auto'):
             backend = _auto_detect(model_name)
+        relay_name = str(m.get('relay_profile', '') or '').strip()
+        relay = relay_profiles.get(relay_name, {}) if relay_name else {}
         return {
             'upstream_model': m.get('upstream_model') or model_name,
             'backend': backend,
-            'target_url': m.get('target_url') or base_url,
-            'api_key': m.get('api_key') or base_key,
+            'target_url': str(m.get('target_url') or relay.get('base_url') or base_url).strip(),
+            'api_key': str(m.get('api_key') or relay.get('api_key') or base_key),
+            'relay_profile': relay_name if relay_name in relay_profiles else '',
+            'active_relay': current.get('active_relay', ''),
             'custom_instructions': m.get('custom_instructions') or '',
             'instructions_position': m.get('instructions_position') or 'prepend',
             'body_modifications': m.get('body_modifications') or {},
@@ -111,6 +172,8 @@ def resolve_model(model_name):
         'backend': _auto_detect(model_name),
         'target_url': base_url,
         'api_key': base_key,
+        'relay_profile': '',
+        'active_relay': current.get('active_relay', ''),
         'custom_instructions': '',
         'instructions_position': 'prepend',
         'body_modifications': {},
@@ -119,10 +182,10 @@ def resolve_model(model_name):
 
 
 def _auto_detect(name):
-    """根据模型名关键字推断默认后端协议类型。
+    """???????????????????
 
-    当前规则较为保守：命中 `claude` 或 `anthropic` 走 Anthropic，
-    其余模型默认视为 OpenAI 兼容后端。
+    ??????????? `claude` ? `anthropic` ? Anthropic?
+    ???????? OpenAI ?????
     """
     lower = (name or '').lower()
     if 'claude' in lower or 'anthropic' in lower:

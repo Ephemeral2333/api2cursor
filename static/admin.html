@@ -3,183 +3,354 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>API 2 Cursor - 管理面板</title>
+<title>API 2 Cursor</title>
 <link rel="stylesheet" href="/static/admin.css">
 </head>
 <body>
 
-<!-- 登录 -->
+<!-- ═══ 登录页 ══════════════════════════════════════ -->
 <div id="login">
   <div class="login-card">
-    <h1>API 2 Cursor</h1>
-    <p>模型映射管理面板</p>
+    <div class="login-logo">
+      <div class="logo-icon">⚡</div>
+      <div>
+        <h1>API 2 Cursor</h1>
+        <div class="brand-ver">Proxy Dashboard</div>
+      </div>
+    </div>
+    <p>请输入访问密钥以继续</p>
     <div class="field">
       <label>ACCESS_API_KEY</label>
       <div class="input-wrap">
-        <input type="password" id="loginKey" placeholder="请输入访问密钥" onkeydown="if(event.key==='Enter')doLogin()">
-        <button class="eye" onclick="togglePwd('loginKey')">&#128065;</button>
+        <input type="password" id="loginKey" placeholder="sk-..." onkeydown="if(event.key==='Enter')doLogin()">
+        <button class="eye" onclick="togglePwd('loginKey')">👁</button>
       </div>
     </div>
     <button class="btn btn-primary btn-block" onclick="doLogin()">登 录</button>
   </div>
 </div>
 
-<!-- 仪表盘 -->
-<div id="dashboard">
-  <header>
-    <div class="container inner">
-      <h1>API 2 Cursor</h1>
-      <div class="right">
-        <span class="status" id="statusBadge">已连接</span>
-        <button class="btn btn-ghost btn-sm" onclick="doLogout()">退出</button>
+<!-- ═══ 主应用 ══════════════════════════════════════ -->
+<div id="app">
+
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">⚡</div>
+      <div>
+        <div class="brand-text">API 2 Cursor</div>
+        <div class="brand-ver">Proxy Dashboard</div>
       </div>
     </div>
-  </header>
 
-  <main class="container">
-    <!-- 全局设置 -->
-    <div class="card">
-      <div class="card-header">
-        <h2>全局设置</h2>
+    <nav class="nav">
+      <div class="nav-section">概览</div>
+      <div class="nav-item active" data-page="overview" onclick="navigate('overview')">
+        <span class="nav-icon">📊</span> 仪表盘
       </div>
-      <div class="field">
-        <label>中转站地址 (Proxy Target URL)</label>
-        <div class="input-wrap"><input type="text" id="targetUrl" placeholder="https://your-relay.com"></div>
-        <div class="hint" id="envUrl"></div>
+
+      <div class="nav-section">配置</div>
+      <div class="nav-item" data-page="relays" onclick="navigate('relays')">
+        <span class="nav-icon">🔗</span> 中转站管理
       </div>
-      <div class="field">
-        <label>中转站 API Key</label>
-        <div class="input-wrap">
-          <input type="password" id="proxyKey" placeholder="sk-xxx 或 Bearer token">
-          <button class="eye" onclick="togglePwd('proxyKey')">&#128065;</button>
+      <div class="nav-item" data-page="mappings" onclick="navigate('mappings')">
+        <span class="nav-icon">🗺</span> 模型映射
+      </div>
+      <div class="nav-item" data-page="settings" onclick="navigate('settings')">
+        <span class="nav-icon">⚙️</span> 全局设置
+      </div>
+
+      <div class="nav-section">调试</div>
+      <div class="nav-item" data-page="logs" onclick="navigate('logs')">
+        <span class="nav-icon">📋</span> 对话日志
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="relay-status">
+        <div class="relay-dot" id="relayDot"></div>
+        <div class="relay-label" id="relayLabel">未配置中转站</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <div class="main-area">
+    <div class="topbar">
+      <div class="topbar-title" id="topbarTitle">仪表盘</div>
+      <div class="status-pill ok" id="statusPill">在线</div>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">退出</button>
+    </div>
+
+    <!-- 页面：仪表盘 -->
+    <div class="page-content" id="page-overview">
+      <div class="stat-grid" id="statGrid">
+        <div class="stat-card accent-purple">
+          <div class="stat-label">请求总数</div>
+          <div class="stat-value" id="statRequests">—</div>
+          <div class="stat-sub">本次运行</div>
         </div>
-        <div class="hint" id="envKey"></div>
-      </div>
-      <div class="field">
-        <label>日志模式</label>
-        <div class="input-wrap">
-          <select id="debugMode">
-            <option value="off">关闭</option>
-            <option value="simple">简易日志（仅控制台）</option>
-            <option value="verbose">详细日志（写入文件）</option>
-          </select>
+        <div class="stat-card accent-cyan">
+          <div class="stat-label">输入 Tokens</div>
+          <div class="stat-value" id="statInput">—</div>
+          <div class="stat-sub">累计</div>
         </div>
-        <div class="hint">关闭：不输出调试日志；简易日志：仅控制台输出；详细日志：额外写入对话级文件日志，并对流式事件做采样截断。</div>
+        <div class="stat-card accent-green">
+          <div class="stat-label">输出 Tokens</div>
+          <div class="stat-value" id="statOutput">—</div>
+          <div class="stat-sub">累计</div>
+        </div>
+        <div class="stat-card accent-yellow">
+          <div class="stat-label">运行时长</div>
+          <div class="stat-value" id="statUptime">—</div>
+          <div class="stat-sub" id="statUptimeSub"></div>
+        </div>
       </div>
-      <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>各模型用量</h2>
+          <div class="actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadStats()">↻ 刷新</button>
+          </div>
+        </div>
+        <div id="statsTable"><div class="empty"><div class="empty-icon">📭</div>暂无统计数据</div></div>
+      </div>
     </div>
 
-    <!-- 模型映射 -->
-    <div class="card">
-      <div class="card-header">
-        <h2>模型映射</h2>
-        <button class="btn btn-green btn-sm" onclick="openAddModal()">+ 添加映射</button>
+    <!-- 页面：中转站管理 -->
+    <div class="page-content" id="page-relays" style="display:none">
+      <div class="card">
+        <div class="card-header">
+          <h2>当前激活中转站</h2>
+        </div>
+        <div class="field">
+          <label>选择激活的中转站</label>
+          <div class="relay-switcher-row">
+            <div class="input-wrap" style="flex:1">
+              <select id="activeRelaySelect" onchange="onActiveRelayChange()">
+                <option value="">不使用（回退到全局设置地址）</option>
+              </select>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="saveActiveRelay()" id="saveActiveRelayBtn">切换</button>
+          </div>
+          <div class="hint" id="activeRelayHint"></div>
+        </div>
       </div>
-      <div class="hint" style="margin-top:-12px;margin-bottom:16px">
-        Cursor 发送请求时会带上模型名 → 代理根据映射表找到上游实际模型名和后端协议进行转发。
-        <br>提示：建议在 Cursor 里使用 Claude 风格的模型名（如 <code>claude-sonnet-4-5-20250929</code>），这样 Cursor 会走 <code>/v1/chat/completions</code> 格式；GPT 风格的模型名会走 <code>/v1/responses</code> 格式，两种都已支持。
+
+      <div class="card">
+        <div class="card-header">
+          <h2>中转站列表</h2>
+          <div class="actions">
+            <button class="btn btn-primary btn-sm" onclick="openRelayModal()">+ 添加中转站</button>
+          </div>
+        </div>
+        <p class="section-hint">管理所有上游中转站地址和密钥。模型映射可绑定指定中转站，或跟随全局激活中转站。</p>
+        <div id="relayList"><div class="empty"><div class="empty-icon">🔗</div>暂无中转站</div></div>
       </div>
-      <div id="mappingList"></div>
     </div>
 
-    <!-- 用量统计 -->
-    <div class="card">
-      <div class="card-header">
-        <h2>用量统计</h2>
-        <button class="btn btn-ghost btn-sm" onclick="loadStats()">刷新</button>
+    <!-- 页面：模型映射 -->
+    <div class="page-content" id="page-mappings" style="display:none">
+      <div class="card">
+        <div class="card-header">
+          <h2>模型映射</h2>
+          <div class="actions">
+            <button class="btn btn-primary btn-sm" onclick="openAddModal()">+ 添加映射</button>
+          </div>
+        </div>
+        <p class="section-hint">Cursor 发出的模型名 → 代理根据此表找到上游模型名、后端协议和目标地址。使用 Claude 风格名（<code>claude-*</code>）走 Chat Completions；GPT 风格名走 Responses。</p>
+        <div id="mappingList"><div class="empty"><div class="empty-icon">🗺</div>暂无映射</div></div>
       </div>
-      <div id="statsContent"><div class="empty">加载中…</div></div>
     </div>
-  </main>
+
+    <!-- 页面：全局设置 -->
+    <div class="page-content" id="page-settings" style="display:none">
+      <div class="card">
+        <div class="card-header"><h2>默认上游地址</h2></div>
+        <p class="section-hint">未激活中转站时使用此处配置，或作为中转站列表为空时的兜底。</p>
+        <div class="field">
+          <label>默认中转站地址</label>
+          <div class="input-wrap"><input type="text" id="targetUrl" placeholder="https://your-relay.com"></div>
+          <div class="hint" id="envUrl"></div>
+        </div>
+        <div class="field">
+          <label>默认 API Key</label>
+          <div class="input-wrap">
+            <input type="password" id="proxyKey" placeholder="sk-...">
+            <button class="eye" onclick="togglePwd('proxyKey')">👁</button>
+          </div>
+          <div class="hint" id="envKey"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2>日志与调试</h2></div>
+        <div class="field">
+          <label>日志模式</label>
+          <div class="input-wrap">
+            <select id="debugMode">
+              <option value="off">关闭 — 不输出调试日志</option>
+              <option value="simple">简易 — 仅控制台输出</option>
+              <option value="verbose">详细 — 控制台 + 写入文件（可在「对话日志」页查看）</option>
+            </select>
+          </div>
+          <div class="hint">详细模式会将完整的请求/响应写入 <code>data/conversations/</code>，可在左侧「对话日志」查看。</div>
+        </div>
+        <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+      </div>
+    </div>
+
+    <!-- 页面：对话日志 -->
+    <div class="page-content" id="page-logs" style="display:none;padding:16px">
+      <div class="log-layout">
+        <!-- 左侧文件列表 -->
+        <div class="log-sidebar">
+          <div class="log-sidebar-header">
+            <h3>📋 对话记录</h3>
+            <button class="btn btn-ghost btn-xs" onclick="loadLogs()">↻</button>
+          </div>
+          <div class="log-file-list" id="logFileList">
+            <div class="empty" style="padding:24px">加载中…</div>
+          </div>
+        </div>
+        <!-- 右侧详情 -->
+        <div class="log-detail">
+          <div class="log-detail-header" id="logDetailHeader" style="display:none">
+            <h3 id="logDetailTitle"></h3>
+            <button class="btn btn-ghost btn-xs" onclick="loadLogDetail(_currentLogId.date,_currentLogId.id)">↻</button>
+            <button class="btn btn-red btn-xs" onclick="deleteCurrentLog()">删除</button>
+          </div>
+          <div id="logDetailBody">
+            <div class="log-empty">
+              <div class="log-empty-icon">📂</div>
+              <div>选择左侧对话查看详情</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:4px">需开启详细日志模式才会生成文件</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.main-area -->
+</div><!-- /#app -->
+
+<!-- ════ 中转站弹窗 ══════════════════════════════ -->
+<div class="modal-overlay" id="relayModal">
+  <div class="modal">
+    <h3><span class="modal-icon">🔗</span> <span id="relayModalTitle">添加中转站</span></h3>
+    <div class="field">
+      <label>名称 *</label>
+      <div class="input-wrap"><input type="text" id="rName" placeholder="例: relay-a"></div>
+      <div class="hint">仅用于面板内部识别</div>
+    </div>
+    <div class="field">
+      <label>地址 (Base URL) *</label>
+      <div class="input-wrap"><input type="text" id="rUrl" placeholder="https://your-relay.com"></div>
+    </div>
+    <div class="field">
+      <label>API Key</label>
+      <div class="input-wrap">
+        <input type="password" id="rKey" placeholder="sk-... 或留空">
+        <button class="eye" onclick="togglePwd('rKey')">👁</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeRelayModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveRelay()">保存</button>
+    </div>
+  </div>
 </div>
 
-<!-- 弹窗 -->
-<div class="modal-overlay" id="modal">
+<!-- ════ 模型映射弹窗 ══════════════════════════════ -->
+<div class="modal-overlay" id="mappingModal">
   <div class="modal">
-    <h3 id="modalTitle">添加模型映射</h3>
+    <h3><span class="modal-icon">🗺</span> <span id="modalTitle">添加模型映射</span></h3>
+
     <div class="field">
-      <label>Cursor 模型名 <span style="color:var(--red)">*</span></label>
+      <label>Cursor 模型名 *</label>
       <div class="input-wrap"><input type="text" id="mName" placeholder="例: claude-sonnet-4-5-20250929"></div>
-      <div class="hint">在 Cursor 自定义模型中添加的名称</div>
+      <div class="hint">在 Cursor 自定义模型中填写的名称</div>
     </div>
     <div class="field">
-      <label>上游实际模型名 <span style="color:var(--red)">*</span></label>
-      <div class="input-wrap"><input type="text" id="mUpstream" placeholder="例: gpt-5.4 或 claude-sonnet-4-5-20250929"></div>
-      <div class="hint">发送到中转站的真实模型名称</div>
+      <label>上游实际模型名 *</label>
+      <div class="input-wrap"><input type="text" id="mUpstream" placeholder="例: gpt-4o 或 claude-sonnet-4-5-20250929"></div>
+      <div class="hint">实际发给中转站的模型名</div>
     </div>
     <div class="field">
       <label>后端类型</label>
       <div class="input-wrap">
         <select id="mBackend">
-          <option value="auto">自动检测</option>
-          <option value="anthropic">Anthropic (/v1/messages)</option>
-          <option value="openai">OpenAI (/v1/chat/completions)</option>
-          <option value="responses">OpenAI Responses (/v1/responses)</option>
-          <option value="gemini">Gemini (generateContent)</option>
+          <option value="auto">自动检测（claude→anthropic / gemini→gemini / 其他→openai）</option>
+          <option value="anthropic">Anthropic — /v1/messages</option>
+          <option value="openai">OpenAI — /v1/chat/completions</option>
+          <option value="responses">OpenAI Responses — /v1/responses</option>
+          <option value="gemini">Gemini — generateContent</option>
         </select>
       </div>
-      <div class="hint">
-        <b>anthropic</b>：转换为 Anthropic Messages 格式 — 适用于中转站通过 <code>/v1/messages</code> 提供 Claude 模型<br>
-        <b>openai</b>：保持 OpenAI Chat Completions 格式 — 适用于 GPT、DeepSeek、Codex 或通过 <code>/v1/chat/completions</code> 提供所有模型的中转站<br>
-        <b>responses</b>：保持 OpenAI Responses 格式 — 适用于中转站仅通过 <code>/v1/responses</code> 提供模型能力<br>
-        <b>gemini</b>：转换为 Gemini Contents 格式 — 适用于 Google Gemini API 或兼容的中转站<br>
-        <b>自动检测</b>：根据上游模型名判断（含 claude → anthropic，含 gemini → gemini，其他 → openai）
-      </div>
     </div>
     <div class="field">
-      <label>自定义地址 <span style="color:var(--muted)">（可选，留空使用全局设置）</span></label>
-      <div class="input-wrap"><input type="text" id="mUrl" placeholder="留空则使用全局中转站地址"></div>
-    </div>
-    <div class="field">
-      <label>自定义 API Key <span style="color:var(--muted)">（可选，留空使用全局设置）</span></label>
+      <label>中转站来源</label>
       <div class="input-wrap">
-        <input type="password" id="mKey" placeholder="留空则使用全局 API Key">
-        <button class="eye" onclick="togglePwd('mKey')">&#128065;</button>
+        <select id="mRelaySource" onchange="onRelaySourceChange()">
+          <option value="global">跟随全局激活中转站</option>
+          <option value="profile">指定中转站</option>
+          <option value="custom">自定义地址和密钥</option>
+        </select>
+      </div>
+    </div>
+    <div id="relayProfileRow" class="field" style="display:none">
+      <label>选择中转站</label>
+      <div class="input-wrap"><select id="mRelayProfile"></select></div>
+    </div>
+    <div id="customRelayRow" style="display:none">
+      <div class="field">
+        <label>自定义地址</label>
+        <div class="input-wrap"><input type="text" id="mUrl" placeholder="留空则使用激活中转站地址"></div>
+      </div>
+      <div class="field">
+        <label>自定义 API Key</label>
+        <div class="input-wrap">
+          <input type="password" id="mKey" placeholder="留空则使用激活中转站密钥">
+          <button class="eye" onclick="togglePwd('mKey')">👁</button>
+        </div>
       </div>
     </div>
     <div class="field">
-      <label>自定义指令 <span style="color:var(--muted)">（可选）</span></label>
-      <div class="input-wrap"><textarea id="mInstructions" rows="5" placeholder="注入到请求中的自定义系统指令&#10;&#10;Responses 格式 → 写入 instructions 字段（developer 级别）&#10;Chat Completions 格式 → 注入为首条 system 消息&#10;Anthropic 格式 → 写入 system 字段" style="resize:vertical;min-height:80px"></textarea></div>
-      <div class="hint">
-        每个模型可单独配置。指令会被注入到发往上游的请求中，模型会无条件信任该内容。<br>
-        适用场景：自定义人格、解除限制、注入 CTF 环境假设等。
+      <label>自定义指令 <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">（可选）</span></label>
+      <div class="input-wrap">
+        <textarea id="mInstructions" rows="4" placeholder="注入到请求的系统提示词，支持 CC / Responses / Anthropic 三种格式" style="resize:vertical;min-height:72px"></textarea>
       </div>
     </div>
     <div class="field">
       <label>注入位置</label>
       <div class="input-wrap">
         <select id="mInsPosition">
-          <option value="prepend">前置（推荐，优先级更高）</option>
+          <option value="prepend">前置（推荐）</option>
           <option value="append">后置</option>
         </select>
       </div>
-      <div class="hint">前置：自定义指令放在系统提示词最前面，模型优先看到；后置：放在末尾</div>
     </div>
     <div class="field">
-      <label>Body 修改 <span style="color:var(--muted)">（可选，JSON 格式）</span></label>
-      <div class="input-wrap"><textarea id="mBodyMods" rows="3" placeholder='例: {"reasoning_effort": "high", "stream_options": null}' style="resize:vertical;min-height:60px;font-family:Consolas,Monaco,monospace;font-size:13px"></textarea></div>
-      <div class="hint">
-        对转发到上游的请求体做字段级增删改。值为 <code>null</code> 表示删除该字段，其余为设置/覆盖。<br>
-        适用场景：注入 <code>reasoning_effort</code>、删除上游不支持的 <code>stream_options</code> 等。
+      <label>Body 修改 <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">（JSON，null 删除字段）</span></label>
+      <div class="input-wrap">
+        <textarea id="mBodyMods" rows="2" placeholder='{"reasoning_effort":"high","stream_options":null}' style="resize:vertical;min-height:52px;font-family:Consolas,monospace;font-size:12px"></textarea>
       </div>
     </div>
     <div class="field">
-      <label>Header 修改 <span style="color:var(--muted)">（可选，JSON 格式）</span></label>
-      <div class="input-wrap"><textarea id="mHeaderMods" rows="3" placeholder='例: {"X-Custom-Header": "value", "X-Unwanted": null}' style="resize:vertical;min-height:60px;font-family:Consolas,Monaco,monospace;font-size:13px"></textarea></div>
-      <div class="hint">
-        对转发到上游的请求头做增删改，规则同 Body 修改。<br>
-        适用场景：按模型设置不同的 <code>Authorization</code>、API 版本头等。
+      <label>Header 修改 <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">（JSON，null 删除字段）</span></label>
+      <div class="input-wrap">
+        <textarea id="mHeaderMods" rows="2" placeholder='{"X-Custom-Header":"value"}' style="resize:vertical;min-height:52px;font-family:Consolas,monospace;font-size:12px"></textarea>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">取消</button>
-      <button class="btn btn-primary" id="modalSaveBtn" onclick="saveMapping()">保存</button>
+      <button class="btn btn-ghost" onclick="closeMappingModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveMapping()">保存</button>
     </div>
   </div>
 </div>
 
 <div class="toast-area" id="toasts"></div>
-
 <script src="/static/admin.js"></script>
 </body>
 </html>
