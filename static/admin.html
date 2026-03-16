@@ -64,6 +64,9 @@
       <div class="nav-item" data-page="logs" onclick="navigate('logs')">
         <span class="nav-icon">📋</span> 对话日志
       </div>
+      <div class="nav-item" data-page="livelog" onclick="navigate('livelog')">
+        <span class="nav-icon">📡</span> 实时日志
+      </div>
     </nav>
 
     <div class="sidebar-footer">
@@ -348,6 +351,26 @@
       <button class="btn btn-primary" onclick="saveMapping()">保存</button>
     </div>
   </div>
+</div>
+
+<div class="page-content" id="page-livelog" style="display:none;padding:16px;display:none">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+    <select id="llLevelFilter" onchange="applyLivelogFilter()" style="padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text)">
+      <option value="">全部级别</option>
+      <option value="DEBUG">DEBUG</option>
+      <option value="INFO">INFO</option>
+      <option value="WARNING">WARNING</option>
+      <option value="ERROR">ERROR</option>
+    </select>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">
+      <input type="checkbox" id="llAutoScroll" checked> 自动滚动
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">
+      <input type="checkbox" id="llPause"> 暂停
+    </label>
+    <button class="btn btn-ghost" onclick="clearLivelog()" style="margin-left:auto">清空</button>
+  </div>
+  <div id="llBody" style="background:#0d0d0d;border-radius:8px;padding:12px;height:calc(100vh - 160px);overflow-y:auto;font-family:Consolas,monospace;font-size:12px;line-height:1.6"></div>
 </div>
 
 <div class="toast-area" id="toasts"></div>

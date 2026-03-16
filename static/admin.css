@@ -227,3 +227,14 @@ select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%
   .stat-grid{grid-template-columns:repeat(2,1fr)}
   .log-layout{grid-template-columns:1fr;grid-template-rows:200px 1fr}
 }
+
+.llline { white-space: pre-wrap; word-break: break-all; padding: 1px 0; }
+.ll-ts { color: #555; }
+.ll-lvl { display: inline-block; min-width: 56px; font-weight: 600; }
+.ll-logger { color: #888; margin-right: 6px; }
+.ll-msg { color: #ccc; }
+.ll-info .ll-lvl { color: #4fc3f7; }
+.ll-warning .ll-lvl { color: #ffb74d; }
+.ll-error .ll-lvl, .ll-critical .ll-lvl { color: #ef5350; }
+.ll-debug .ll-lvl { color: #555; }
+
