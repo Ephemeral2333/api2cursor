@@ -97,7 +97,10 @@ def forward_request(url, headers, payload, stream=False):
             kwargs['proxies'] = {'https': _proxy, 'http': _proxy}
         resp = requests.post(url, **kwargs)
         if resp.status_code != 200:
-            body = resp.content.decode('utf-8', errors='replace')
+            try:
+                body = resp.content.decode('utf-8', errors='replace')
+            except Exception:
+                body = resp.text or ''
             logger.warning(f'上游返回 {resp.status_code}: {body[:300]}')
             if stream:
                 return None, f'上游错误 {resp.status_code}: {body}'
