@@ -1,9 +1,9 @@
-"""??: ????
+"""路由：管理面板
 
-?? Web ????? API?
-  - /admin         ? ??????
-  - /v1/models     ? ?????? Cursor ???
-  - /api/admin/*   ? ????????? CRUD????? CRUD??????
+提供 Web 管理界面和 API：
+  - /admin         — 返回管理界面 HTML
+  - /v1/models     — 返回模型列表供 Cursor 使用
+  - /api/admin/*   — 管理面板 CRUD 接口（设置、中转站 CRUD、模型映射 CRUD）
 """
 
 import json
@@ -22,28 +22,28 @@ _STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 bp = Blueprint('admin', __name__)
 
 
-# ??? ???? ?????????????????????????????????????
+# ─── 静态页面 ─────────────────────────────────────
 
 
 @bp.route('/admin')
 @bp.route('/admin/')
 def admin_page():
-    """???????? HTML ??????????????"""
+    """返回管理面板 HTML，由 React/原生 JS 渲染完整界面。"""
     return send_from_directory(_STATIC_DIR, 'admin.html')
 
 
 @bp.route('/static/<path:filename>')
 def static_files(filename):
-    """????????????????"""
+    """提供管理面板所需的静态资源文件。"""
     return send_from_directory(_STATIC_DIR, filename)
 
 
-# ??? ???? ?????????????????????????????????????
+# ─── 模型列表 ─────────────────────────────────────
 
 
 @bp.route('/v1/models', methods=['GET'])
 def list_models():
-    """????????????? Cursor ???????"""
+    """返回已配置的模型映射列表，供 Cursor 下拉选择使用。"""
     mappings = settings.get().get('model_mappings', {})
     models = [{
         'id': name,
@@ -60,26 +60,26 @@ def list_models():
     return jsonify({'object': 'list', 'data': models})
 
 
-# ??? ???? ?????????????????????????????????????
+# ─── 鉴权登录 ─────────────────────────────────────
 
 
 @bp.route('/api/admin/login', methods=['POST'])
 def admin_login():
-    """???????????????????????"""
+    """验证管理面板访问密钥，返回登录结果。"""
     data = request.get_json(force=True)
     if not Config.ACCESS_API_KEY:
-        return jsonify({'ok': True, 'message': '?????'})
+        return jsonify({'ok': True, 'message': '未设置访问密钥'})
     if data.get('key', '') == Config.ACCESS_API_KEY:
         return jsonify({'ok': True})
-    return jsonify({'ok': False, 'message': '????'}), 401
+    return jsonify({'ok': False, 'message': '密钥错误'}), 401
 
 
-# ??? ???? ?????????????????????????????????????
+# ─── 全局设置 ─────────────────────────────────────
 
 
 @bp.route('/api/admin/settings', methods=['GET'])
 def get_settings():
-    """??????????????"""
+    """读取当前全局配置并返回。"""
     err = _check_auth()
     if err:
         return err
@@ -102,7 +102,7 @@ def get_settings():
 
 @bp.route('/api/admin/settings', methods=['PUT'])
 def update_settings():
-    """??????????????????????"""
+    """更新全局配置，支持部分字段覆盖。"""
     err = _check_auth()
     if err:
         return err
@@ -116,17 +116,17 @@ def update_settings():
         active_relay = str(data.get('active_relay', '') or '').strip()
         relay_profiles = s.get('relay_profiles', {})
         if active_relay and active_relay not in relay_profiles:
-            return jsonify({'error': '?????????'}), 400
+            return jsonify({'error': '中转站不存在'}), 400
         s['active_relay'] = active_relay
-    return _save_and_respond(s, '???????')
+    return _save_and_respond(s, '设置已更新')
 
 
-# ??? ????? ???????????????????????????????????
+# ─── 中转站管理 ───────────────────────────────────
 
 
 @bp.route('/api/admin/relays', methods=['GET'])
 def list_relays():
-    """??????????"""
+    """返回所有中转站配置。"""
     err = _check_auth()
     if err:
         return err
@@ -139,31 +139,31 @@ def list_relays():
 
 @bp.route('/api/admin/relays', methods=['POST'])
 def add_relay():
-    """??????????"""
+    """新增一个中转站配置。"""
     err = _check_auth()
     if err:
         return err
     data = request.get_json(force=True)
     name = str(data.get('name', '') or '').strip()
     if not name:
-        return jsonify({'error': '?????????'}), 400
+        return jsonify({'error': '中转站名称不能为空'}), 400
 
     s = settings.get()
     relays = s.setdefault('relay_profiles', {})
     if name in relays:
-        return jsonify({'error': '??????'}), 400
+        return jsonify({'error': '名称已存在'}), 400
 
     relays[name] = {
         'name': name,
         'base_url': str(data.get('base_url', '') or '').strip(),
         'api_key': str(data.get('api_key', '') or ''),
     }
-    return _save_and_respond(s, f'??????: {name}')
+    return _save_and_respond(s, f'添加中转站: {name}')
 
 
 @bp.route('/api/admin/relays/<path:name>', methods=['PUT'])
 def update_relay(name):
-    """????????????????"""
+    """更新指定中转站配置，支持重命名。"""
     err = _check_auth()
     if err:
         return err
@@ -171,13 +171,13 @@ def update_relay(name):
     s = settings.get()
     relays = s.get('relay_profiles', {})
     if name not in relays:
-        return jsonify({'error': '??????'}), 404
+        return jsonify({'error': '中转站不存在'}), 404
 
     new_name = str(data.get('name', name) or '').strip()
     if not new_name:
-        return jsonify({'error': '?????????'}), 400
+        return jsonify({'error': '名称不能为空'}), 400
     if new_name != name and new_name in relays:
-        return jsonify({'error': '??????????'}), 400
+        return jsonify({'error': '新名称已被占用'}), 400
 
     entry = {
         'name': new_name,
@@ -199,12 +199,12 @@ def update_relay(name):
 
     s['relay_profiles'] = relays
     s['model_mappings'] = mappings
-    return _save_and_respond(s, f'??????: {name} ? {new_name}')
+    return _save_and_respond(s, f'更新中转站: {name} → {new_name}')
 
 
 @bp.route('/api/admin/relays/<path:name>', methods=['DELETE'])
 def delete_relay(name):
-    """??????????"""
+    """删除指定中转站配置。"""
     err = _check_auth()
     if err:
         return err
@@ -216,21 +216,21 @@ def delete_relay(name):
     mappings = s.get('model_mappings', {})
     refs = [model for model, mapping in mappings.items() if mapping.get('relay_profile') == name]
     if refs:
-        return jsonify({'error': f'????????????: {", ".join(refs[:5])}'}), 400
+        return jsonify({'error': f'以下模型映射仍在使用此中转站: {", ".join(refs[:5])}'}), 400
 
     del relays[name]
     s['relay_profiles'] = relays
     if s.get('active_relay') == name:
         s['active_relay'] = ''
-    return _save_and_respond(s, f'??????: {name}')
+    return _save_and_respond(s, f'删除中转站: {name}')
 
 
-# ??? ???? CRUD ????????????????????????????????
+# ─── 模型映射 CRUD ────────────────────────────────
 
 
 @bp.route('/api/admin/mappings', methods=['GET'])
 def list_mappings():
-    """??????????????????????"""
+    """返回所有模型映射配置，键为 Cursor 侧模型名。"""
     err = _check_auth()
     if err:
         return err
@@ -239,14 +239,14 @@ def list_mappings():
 
 @bp.route('/api/admin/mappings', methods=['POST'])
 def add_mapping():
-    """??????????????????"""
+    """新增一条模型映射配置。"""
     err = _check_auth()
     if err:
         return err
     data = request.get_json(force=True)
     name = data.get('name', '').strip()
     if not name:
-        return jsonify({'error': '??????'}), 400
+        return jsonify({'error': '模型名不能为空'}), 400
 
     s = settings.get()
     mappings = s.setdefault('model_mappings', {})
@@ -262,12 +262,12 @@ def add_mapping():
         'body_modifications': data.get('body_modifications') or {},
         'header_modifications': data.get('header_modifications') or {},
     }
-    return _save_and_respond(s, f'?????: {name}')
+    return _save_and_respond(s, f'添加映射: {name}')
 
 
 @bp.route('/api/admin/mappings/<path:name>', methods=['PUT'])
 def update_mapping(name):
-    """?????????????????????"""
+    """更新指定模型映射配置，支持重命名。"""
     err = _check_auth()
     if err:
         return err
@@ -275,7 +275,7 @@ def update_mapping(name):
     s = settings.get()
     mappings = s.get('model_mappings', {})
     if name not in mappings:
-        return jsonify({'error': '?????'}), 404
+        return jsonify({'error': '映射不存在'}), 404
 
     new_name = data.get('name', name).strip()
     relay_profile = _validate_mapping_relay(s, data.get('relay_profile', ''))
@@ -294,12 +294,12 @@ def update_mapping(name):
         del mappings[name]
     mappings[new_name] = entry
     s['model_mappings'] = mappings
-    return _save_and_respond(s, f'?????: {name} ? {new_name}')
+    return _save_and_respond(s, f'更新映射: {name} → {new_name}')
 
 
 @bp.route('/api/admin/mappings/<path:name>', methods=['DELETE'])
 def delete_mapping(name):
-    """????????????????????????"""
+    """删除指定模型映射，若不存在则静默返回成功。"""
     err = _check_auth()
     if err:
         return err
@@ -308,16 +308,16 @@ def delete_mapping(name):
     if name in mappings:
         del mappings[name]
         s['model_mappings'] = mappings
-        return _save_and_respond(s, f'?????: {name}')
+        return _save_and_respond(s, f'删除映射: {name}')
     return jsonify({'ok': True})
 
 
-# ??? ???? ?????????????????????????????????????
+# ─── 统计数据 ─────────────────────────────────────
 
 
 @bp.route('/api/admin/stats', methods=['GET'])
 def get_stats():
-    """????????????"""
+    """返回请求统计数据。"""
     err = _check_auth()
     if err:
         return err
@@ -325,17 +325,17 @@ def get_stats():
     return jsonify(usage_tracker.get_stats())
 
 
-# ??? ???? ?????????????????????????????????????
+# ─── 鉴权辅助 ─────────────────────────────────────
 
 
 def _check_auth():
-    """Admin API ????? None ????"""
+    """校验 Admin API 访问令牌，通过返回 None，否则返回错误响应。"""
     if not Config.ACCESS_API_KEY:
         return None
     auth = request.headers.get('Authorization', '')
     token = auth[7:] if auth.startswith('Bearer ') else request.headers.get('x-api-key', '')
     if token != Config.ACCESS_API_KEY:
-        return jsonify({'error': '???'}), 401
+        return jsonify({'error': '未授权'}), 401
     return None
 
 
@@ -436,21 +436,21 @@ def _validate_mapping_relay(current_settings, relay_name):
         return ''
     relay_profiles = current_settings.get('relay_profiles', {})
     if relay_name not in relay_profiles:
-        raise ValueError('???????????')
+        raise ValueError('指定的中转站不存在')
     return relay_name
 
 
 def _save_and_respond(data, log_msg):
-    """??????????????
+    """保存配置并返回统一响应。
 
-    ????????????????????? JSON ?????
+    保存成功返回 {'ok': True}，失败返回对应的 JSON 错误。
     """
     try:
         settings.save(data)
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
     except OSError as e:
-        logger.error(f'????: {e}')
-        return jsonify({'error': {'message': f'????: {e}', 'type': 'save_error'}}), 500
+        logger.error(f'保存失败: {e}')
+        return jsonify({'error': {'message': f'保存失败: {e}', 'type': 'save_error'}}), 500
     logger.info(log_msg)
     return jsonify({'ok': True})
