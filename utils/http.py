@@ -36,13 +36,6 @@ def build_anthropic_headers(api_key: str) -> dict[str, str]:
     headers = {
         'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
-        'User-Agent': 'anthropic-sdk-typescript/0.36.3 claude-code/1.2.20 (linux/x64 node/v20.18.1)',
-        'x-stainless-lang': 'js',
-        'x-stainless-package-version': '0.36.3',
-        'x-stainless-os': 'Linux',
-        'x-stainless-arch': 'x64',
-        'x-stainless-runtime': 'node',
-        'x-stainless-runtime-version': 'v20.18.1',
     }
     if api_key.startswith('sk-'):
         headers['x-api-key'] = api_key
