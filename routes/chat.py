@@ -124,8 +124,7 @@ def chat_completions():
         metadata={'message_count': message_count},
     )
 
-    log_route_context('chat', ctx, extra=f'msgs={message_count}')
-    _log_messages(payload)
+    log_route_context('chat', ctx, extra=f'消息数={message_count}')
 
     payload['messages'] = thinking_cache.inject(payload.get('messages', []))
 
@@ -647,23 +646,3 @@ def _finalize_chat_response(
     return jsonify(data)
 
 
-def _log_messages(payload: dict[str, Any]) -> None:
-    """Log a one-line summary per message for debugging request shape."""
-    for index, message in enumerate(payload.get('messages', [])):
-        role = message.get('role', '?')
-        content = message.get('content')
-        extra = ''
-
-        if 'tool_calls' in message:
-            extra += f'  tool_calls={len(message["tool_calls"])}'
-        if message.get('tool_call_id'):
-            extra += f'  tool_call_id={message["tool_call_id"]}'
-
-        if isinstance(content, list):
-            content_info = f'list[{len(content)}]'
-        elif isinstance(content, str):
-            content_info = f'text[{len(content)}]'
-        else:
-            content_info = type(content).__name__
-
-        logger.info('  msg[%s]  role=%-10s  %s%s', index, role, content_info, extra)

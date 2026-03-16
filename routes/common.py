@@ -93,14 +93,14 @@ def build_gemini_target(ctx: RouteContext, stream: bool = False) -> tuple[str, d
 
 
 def log_route_context(route_name: str, ctx: RouteContext, *, extra: str = '') -> None:
-    """Log a one-line request summary at the start of each route."""
-    stream_flag = 'stream' if ctx.is_stream else 'sync'
+    """统一输出路由级日志。"""
+    stream_flag = '流式' if ctx.is_stream else '同步'
     model_part = (
-        f'{ctx.client_model} → {ctx.upstream_model}'
+        f'模型={ctx.client_model} → {ctx.upstream_model}'
         if ctx.client_model != ctx.upstream_model
-        else ctx.client_model
+        else f'模型={ctx.client_model}'
     )
-    parts = [f'[{route_name}]', model_part, f'backend={ctx.backend}', stream_flag]
+    parts = [f'[{route_name}]', model_part, f'后端={ctx.backend}', stream_flag]
     if extra:
         parts.append(extra)
     logger.info('  '.join(parts))
