@@ -36,6 +36,7 @@ def build_anthropic_headers(api_key: str) -> dict[str, str]:
     headers = {
         'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
+        'User-Agent': 'claude-code/1.0',
     }
     if api_key.startswith('sk-'):
         headers['x-api-key'] = api_key
