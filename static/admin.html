@@ -188,6 +188,19 @@
       </div>
 
       <div class="card">
+        <div class="card-header"><h2>上游代理</h2></div>
+        <p class="section-hint">为上游 API 请求配置代理，留空则直连。支持 HTTP / SOCKS5 格式，用户名密码直接写在 URL 中。</p>
+        <div class="field">
+          <label>代理地址</label>
+          <div class="input-wrap">
+            <input type="text" id="upstreamProxy" placeholder="socks5://user:pass@127.0.0.1:1080">
+          </div>
+          <div class="hint">示例：<code>http://127.0.0.1:7890</code> &nbsp;或&nbsp; <code>socks5://user:pass@host:1080</code></div>
+        </div>
+        <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+      </div>
+
+      <div class="card">
         <div class="card-header"><h2>日志与调试</h2></div>
         <div class="field">
           <label>日志模式</label>

@@ -91,6 +91,10 @@ def forward_request(url, headers, payload, stream=False):
         kwargs: dict = dict(headers=headers, json=payload, timeout=Config.API_TIMEOUT, stream=stream)
         if _IMPERSONATE:
             kwargs['impersonate'] = _IMPERSONATE
+        import settings as _settings
+        _proxy = _settings.get().get('upstream_proxy', '').strip() or Config.UPSTREAM_PROXY
+        if _proxy:
+            kwargs['proxies'] = {'https': _proxy, 'http': _proxy}
         resp = requests.post(url, **kwargs)
         if resp.status_code != 200:
             body = resp.content.decode('utf-8', errors='replace')

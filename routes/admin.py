@@ -89,6 +89,7 @@ def get_settings():
     return jsonify({
         'proxy_target_url': s.get('proxy_target_url', ''),
         'proxy_api_key': s.get('proxy_api_key', ''),
+        'upstream_proxy': s.get('upstream_proxy', '') or Config.UPSTREAM_PROXY,
         'debug_mode': s.get('debug_mode', '') or Config.DEBUG_MODE,
         'active_relay': s.get('active_relay', ''),
         'effective_target_url': effective_url,
@@ -107,7 +108,7 @@ def update_settings():
         return err
     data = request.get_json(force=True)
     s = settings.get()
-    for key in ('proxy_target_url', 'proxy_api_key', 'debug_mode'):
+    for key in ('proxy_target_url', 'proxy_api_key', 'upstream_proxy', 'debug_mode'):
         if key in data:
             s[key] = data[key]
 

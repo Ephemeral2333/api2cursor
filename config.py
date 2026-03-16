@@ -20,6 +20,9 @@ class Config:
     API_TIMEOUT = int(os.getenv('API_TIMEOUT', '300'))
     # 访问鉴权密钥，留空则不启用鉴权
     ACCESS_API_KEY = os.getenv('ACCESS_API_KEY', '')
+    # 上游请求代理，留空则不使用代理
+    # 示例: socks5://user:pass@127.0.0.1:1080 或 http://127.0.0.1:7890
+    UPSTREAM_PROXY = os.getenv('UPSTREAM_PROXY', '')
 
     # 调试模式分级：
     # - off: 关闭调试
