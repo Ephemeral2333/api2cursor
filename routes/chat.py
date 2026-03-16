@@ -126,7 +126,8 @@ def chat_completions():
 
     log_route_context('chat', ctx, extra=f'消息数={message_count}')
 
-    payload['messages'] = thinking_cache.inject(payload.get('messages', []))
+    if ctx.backend != 'responses':
+        payload['messages'] = thinking_cache.inject(payload.get('messages', []))
 
     if ctx.backend == 'openai':
         return _handle_openai_backend(ctx, payload, turn)
