@@ -79,9 +79,9 @@ bp = Blueprint('chat', __name__)
 
 
 def _dbg(message: str) -> None:
-    """仅在调试模式下输出详细日志。"""
+    """Output detailed log only when debug mode is enabled."""
     if settings.get_debug_mode() in ('simple', 'verbose'):
-        logger.info('[聊天补全调试] %s', message)
+        logger.info('[chat:dbg] %s', message)
 
 
 def _extract_responses_usage(event_data: dict[str, Any]) -> dict[str, Any] | None:
@@ -124,7 +124,7 @@ def chat_completions():
         metadata={'message_count': message_count},
     )
 
-    log_route_context('聊天补全', ctx, extra=f'消息数={message_count}')
+    log_route_context('chat', ctx, extra=f'msgs={message_count}')
     _log_messages(payload)
 
     payload['messages'] = thinking_cache.inject(payload.get('messages', []))
@@ -147,33 +147,20 @@ def _normalize_chat_payload(payload: dict[str, Any]) -> tuple[dict[str, Any], in
     message_count = len(payload.get('messages', []))
 
     if message_count == 0 and 'input' in payload:
-        logger.info('检测到 Responses 格式误入聊天补全接口，已自动转换为 Chat Completions 格式')
+        logger.info('Responses format detected on /v1/chat/completions, auto-converted to Chat Completions')
         payload = responses_to_cc(payload)
         message_count = len(payload.get('messages', []))
     elif message_count == 0:
-        logger.warning('消息列表为空，请求字段=%s', list(payload.keys()))
+        logger.warning('empty messages list  fields=%s', list(payload.keys()))
 
     return payload, message_count
 
 
 def _handle_openai_backend(ctx: RouteContext, payload: dict[str, Any], turn: dict[str, Any]):
     """处理走 OpenAI 兼容后端的聊天补全请求。"""
-    _dbg(
-        '原始请求字段=' + str(list(payload.keys())) + ' '
-        + '附加字段='
-        + json.dumps(
-            {k: v for k, v in payload.items() if k != 'messages'},
-            ensure_ascii=False,
-            default=str,
-        )[:500]
-    )
-
     payload = normalize_request(payload, ctx.upstream_model)
     payload = inject_instructions_cc(payload, ctx.custom_instructions, ctx.instructions_position)
-    _dbg(
-        f'标准化完成：模型={payload.get("model")} '
-        f'工具数={len(payload.get("tools", []))}'
-    )
+    _dbg(f'→ openai  model={payload.get("model")}  tools={len(payload.get("tools", []))}')
 
     url, headers = build_openai_target(ctx)
     payload = apply_body_modifications(payload, ctx.body_modifications)
@@ -202,10 +189,8 @@ def _handle_openai_non_stream(
 
     raw = resp.json()
     attach_upstream_response(turn, raw)
-    _dbg('上游原始响应=' + json.dumps(raw, ensure_ascii=False, default=str)[:1000])
-
     data = fix_response(raw)
-    return _finalize_chat_response(ctx, data, turn=turn, debug_label='修复后响应')
+    return _finalize_chat_response(ctx, data, turn=turn)
 
 
 def _handle_openai_stream(
@@ -236,7 +221,6 @@ def _handle_openai_stream(
 
         for chunk in iter_openai_sse(resp):
             if chunk is None:
-                _dbg(f'流式响应结束，共 {chunk_count} 个数据片段')
                 close_chunk = think_extractor.finalize()
                 if close_chunk:
                     client_chunks.append(close_chunk)
@@ -245,6 +229,9 @@ def _handle_openai_stream(
                 append_client_event(turn, {'type': 'done'})
                 yield sse_data_message('[DONE]')
                 usage_tracker.record(ctx.client_model, last_usage)
+                in_tok = (last_usage or {}).get('prompt_tokens', 0)
+                out_tok = (last_usage or {}).get('completion_tokens', 0)
+                _dbg(f'stream done  chunks={chunk_count}  in={in_tok}  out={out_tok}')
                 set_stream_summary(turn, {
                     'chunk_count': chunk_count,
                     'client_chunk_count': len(client_chunks),
@@ -263,23 +250,12 @@ def _handle_openai_stream(
             if chunk.get('usage'):
                 last_usage = chunk['usage']
 
-            if chunk_count < 10:
-                _dbg(
-                    f'上游原始片段#{chunk_count}='
-                    + json.dumps(chunk, ensure_ascii=False, default=str)[:500]
-                )
-
             chunk = fix_stream_chunk(chunk)
             chunk['model'] = ctx.client_model
 
             for out in think_extractor.process_chunk(chunk):
                 client_chunks.append(out)
                 append_client_event(turn, {'type': 'chat_chunk', 'data': out})
-                if chunk_count < 10:
-                    _dbg(
-                        f'返回片段#{chunk_count}='
-                        + json.dumps(out, ensure_ascii=False, default=str)[:500]
-                    )
                 yield sse_data_message(out)
 
             chunk_count += 1
@@ -311,10 +287,7 @@ def _handle_responses_backend(ctx: RouteContext, payload: dict[str, Any], turn: 
     responses_payload = cc_to_responses_request(payload)
     responses_payload['model'] = ctx.upstream_model
     responses_payload = inject_instructions_responses(responses_payload, ctx.custom_instructions, ctx.instructions_position)
-    _dbg(
-        '已转换为 Responses 请求：字段=' + str(list(responses_payload.keys()))
-        + f' 输入项数={len(responses_payload.get("input", []))}'
-    )
+    _dbg(f'→ responses  inputs={len(responses_payload.get("input", []))}')
 
     url, headers = build_responses_target(ctx)
     responses_payload = apply_body_modifications(responses_payload, ctx.body_modifications)
@@ -343,10 +316,8 @@ def _handle_responses_non_stream(
 
     raw = resp.json()
     attach_upstream_response(turn, raw)
-    _dbg('上游原始响应=' + json.dumps(raw, ensure_ascii=False, default=str)[:1000])
-
     data = responses_to_cc_response(raw, ctx.client_model)
-    return _finalize_chat_response(ctx, data, turn=turn, debug_label='Responses 转回聊天补全后')
+    return _finalize_chat_response(ctx, data, turn=turn)
 
 
 def _handle_responses_stream(
@@ -383,27 +354,19 @@ def _handle_responses_stream(
                     'completion_tokens': extracted_usage.get('output_tokens', 0),
                     'total_tokens': extracted_usage.get('total_tokens', 0),
                 }
-            if event_count < 10:
-                _dbg(
-                    f'上游事件#{event_count} 类型={event_type} 数据='
-                    + json.dumps(event_data, ensure_ascii=False, default=str)[:500]
-                )
 
             for chunk in converter.process_event(event_type, event_data):
                 client_chunks.append(chunk)
                 append_client_event(turn, {'type': 'chat_chunk', 'data': chunk})
                 if isinstance(chunk, dict) and isinstance(chunk.get('usage'), dict):
                     last_usage = chunk['usage']
-                if event_count < 10:
-                    _dbg(
-                        f'返回片段#{event_count}='
-                        + json.dumps(chunk, ensure_ascii=False, default=str)[:500]
-                    )
                 yield sse_data_message(chunk)
 
             event_count += 1
 
-        _dbg(f'流式响应结束，共 {event_count} 个事件')
+        in_tok = (last_usage or {}).get('prompt_tokens', 0)
+        out_tok = (last_usage or {}).get('completion_tokens', 0)
+        _dbg(f'stream done  events={event_count}  in={in_tok}  out={out_tok}')
         append_client_event(turn, {'type': 'done'})
         yield sse_data_message('[DONE]')
         usage_tracker.record(ctx.client_model, last_usage)
@@ -427,10 +390,7 @@ def _handle_gemini_backend(ctx: RouteContext, payload: dict[str, Any], turn: dic
     """处理走 Gemini Contents 后端的聊天补全请求。"""
     payload = inject_instructions_cc(payload, ctx.custom_instructions, ctx.instructions_position)
     gemini_payload = cc_to_gemini_request(payload)
-    _dbg(
-        '已转换为 Gemini 请求：字段=' + str(list(gemini_payload.keys()))
-        + f' 内容数={len(gemini_payload.get("contents", []))}'
-    )
+    _dbg(f'→ gemini  contents={len(gemini_payload.get("contents", []))}')
 
     url, headers = build_gemini_target(ctx, stream=ctx.is_stream)
     gemini_payload = apply_body_modifications(gemini_payload, ctx.body_modifications)
@@ -458,10 +418,8 @@ def _handle_gemini_non_stream(
 
     raw = resp.json()
     attach_upstream_response(turn, raw)
-    _dbg('上游原始响应=' + json.dumps(raw, ensure_ascii=False, default=str)[:1000])
-
     data = gemini_to_cc_response(raw)
-    return _finalize_chat_response(ctx, data, turn=turn, debug_label='Gemini 转回聊天补全后')
+    return _finalize_chat_response(ctx, data, turn=turn)
 
 
 def _handle_gemini_stream(
@@ -496,11 +454,6 @@ def _handle_gemini_stream(
                     'completion_tokens': usage_meta.get('candidatesTokenCount', 0),
                     'total_tokens': usage_meta.get('totalTokenCount', 0),
                 }
-            if chunk_count < 10:
-                _dbg(
-                    f'上游 Gemini 片段#{chunk_count}='
-                    + json.dumps(gemini_chunk, ensure_ascii=False, default=str)[:500]
-                )
 
             for cc_chunk in converter.process_chunk(gemini_chunk):
                 cc_chunk['model'] = ctx.client_model
@@ -508,16 +461,13 @@ def _handle_gemini_stream(
                 append_client_event(turn, {'type': 'chat_chunk', 'data': cc_chunk})
                 if isinstance(cc_chunk, dict) and isinstance(cc_chunk.get('usage'), dict):
                     last_usage = cc_chunk['usage']
-                if chunk_count < 10:
-                    _dbg(
-                        f'返回片段#{chunk_count}='
-                        + json.dumps(cc_chunk, ensure_ascii=False, default=str)[:500]
-                    )
                 yield sse_data_message(cc_chunk)
 
             chunk_count += 1
 
-        _dbg(f'流式响应结束，共 {chunk_count} 个数据片段')
+        in_tok = (last_usage or {}).get('prompt_tokens', 0)
+        out_tok = (last_usage or {}).get('completion_tokens', 0)
+        _dbg(f'stream done  chunks={chunk_count}  in={in_tok}  out={out_tok}')
         append_client_event(turn, {'type': 'done'})
         yield sse_data_message('[DONE]')
         usage_tracker.record(ctx.client_model, last_usage)
@@ -542,10 +492,7 @@ def _handle_anthropic_backend(ctx: RouteContext, payload: dict[str, Any], turn: 
     payload['model'] = ctx.upstream_model
     anthropic_payload = cc_to_messages_request(payload)
     anthropic_payload = inject_instructions_anthropic(anthropic_payload, ctx.custom_instructions, ctx.instructions_position)
-    _dbg(
-        '已转换为 Messages 请求：字段=' + str(list(anthropic_payload.keys()))
-        + f' 消息数={len(anthropic_payload.get("messages", []))}'
-    )
+    _dbg(f'→ anthropic/messages  msgs={len(anthropic_payload.get("messages", []))}  tools={len(anthropic_payload.get("tools", []))}')
 
     url, headers = build_anthropic_target(ctx)
     anthropic_payload = apply_body_modifications(anthropic_payload, ctx.body_modifications)
@@ -574,10 +521,8 @@ def _handle_anthropic_non_stream(
 
     raw = resp.json()
     attach_upstream_response(turn, raw)
-    _dbg('上游原始响应=' + json.dumps(raw, ensure_ascii=False, default=str)[:1000])
-
     data = messages_to_cc_response(raw)
-    return _finalize_chat_response(ctx, data, turn=turn, debug_label='Messages 转回聊天补全后')
+    return _finalize_chat_response(ctx, data, turn=turn)
 
 
 def _handle_anthropic_stream(
@@ -631,11 +576,6 @@ def _handle_anthropic_stream(
                         'completion_tokens': completion_tokens,
                         'total_tokens': prompt_tokens + completion_tokens,
                     }
-            if event_count < 10:
-                _dbg(
-                    f'上游事件#{event_count} 类型={event_type} 数据='
-                    + json.dumps(event_data, ensure_ascii=False, default=str)[:500]
-                )
 
             for chunk_str in converter.process_event(event_type, event_data):
                 try:
@@ -649,13 +589,13 @@ def _handle_anthropic_stream(
 
                 client_chunks.append(chunk_str)
                 append_client_event(turn, {'type': 'chat_chunk', 'data': chunk_str})
-                if event_count < 10:
-                    _dbg(f'返回片段#{event_count}={chunk_str[:500]}')
                 yield sse_data_message(chunk_str)
 
             event_count += 1
 
-        _dbg(f'流式响应结束，共 {event_count} 个事件')
+        in_tok = (last_usage or {}).get('prompt_tokens', 0)
+        out_tok = (last_usage or {}).get('completion_tokens', 0)
+        _dbg(f'stream done  events={event_count}  in={in_tok}  out={out_tok}')
         append_client_event(turn, {'type': 'done'})
         yield sse_data_message('[DONE]')
         usage_tracker.record(ctx.client_model, last_usage)
@@ -680,7 +620,6 @@ def _finalize_chat_response(
     data: dict[str, Any],
     *,
     turn: dict[str, Any] | None,
-    debug_label: str,
 ):
     """统一收尾非流式聊天补全响应。
 
@@ -690,8 +629,7 @@ def _finalize_chat_response(
     - 输出统一令牌统计日志
     """
     data['model'] = ctx.client_model
-    _dbg(debug_label + '=' + json.dumps(data, ensure_ascii=False, default=str)[:1000])
-    log_usage('聊天补全', data.get('usage', {}), input_key='prompt_tokens', output_key='completion_tokens')
+    log_usage('chat', data.get('usage', {}), input_key='prompt_tokens', output_key='completion_tokens')
 
     usage_tracker.record(ctx.client_model, data.get('usage'))
     attach_client_response(turn, data)
@@ -710,22 +648,22 @@ def _finalize_chat_response(
 
 
 def _log_messages(payload: dict[str, Any]) -> None:
-    """记录消息摘要，方便排查请求形态是否符合预期。"""
+    """Log a one-line summary per message for debugging request shape."""
     for index, message in enumerate(payload.get('messages', [])):
         role = message.get('role', '?')
         content = message.get('content')
         extra = ''
 
         if 'tool_calls' in message:
-            extra += f' 工具调用数={len(message["tool_calls"])}'
+            extra += f'  tool_calls={len(message["tool_calls"])}'
         if message.get('tool_call_id'):
-            extra += f' 工具调用ID={message["tool_call_id"]}'
+            extra += f'  tool_call_id={message["tool_call_id"]}'
 
         if isinstance(content, list):
-            content_info = f'列表[{len(content)}]'
+            content_info = f'list[{len(content)}]'
         elif isinstance(content, str):
-            content_info = f'文本[{len(content)}]'
+            content_info = f'text[{len(content)}]'
         else:
             content_info = type(content).__name__
 
-        logger.info('  消息[%s] 角色=%s 内容=%s%s', index, role, content_info, extra)
+        logger.info('  msg[%s]  role=%-10s  %s%s', index, role, content_info, extra)

@@ -64,9 +64,9 @@ bp = Blueprint('responses', __name__)
 
 
 def _dbg(message: str) -> None:
-    """仅在调试模式下输出详细日志。"""
+    """Output detailed log only when debug mode is enabled."""
     if settings.get_debug_mode() in ('simple', 'verbose'):
-        logger.info('[响应生成调试] %s', message)
+        logger.info('[responses:dbg] %s', message)
 
 
 @bp.route('/v1/responses', methods=['POST'])
@@ -88,7 +88,7 @@ def responses_endpoint():
         target_url=ctx.target_url,
         upstream_model=ctx.upstream_model,
     )
-    log_route_context('响应生成', ctx)
+    log_route_context('responses', ctx)
 
     cc_payload = _build_cc_payload(payload, ctx)
 
@@ -111,20 +111,14 @@ def _build_cc_payload(payload: dict[str, Any], ctx: RouteContext) -> dict[str, A
     cc_payload['model'] = ctx.upstream_model
     cc_payload['messages'] = thinking_cache.inject(cc_payload.get('messages', []))
     cc_payload = inject_instructions_cc(cc_payload, ctx.custom_instructions, ctx.instructions_position)
-    _dbg(
-        '已转换为聊天补全中间表示：字段=' + str(list(cc_payload.keys()))
-        + f' 消息数={len(cc_payload.get("messages", []))}'
-    )
+    _dbg(f'converted to CC intermediate  msgs={len(cc_payload.get("messages", []))}')
     return cc_payload
 
 
 def _handle_openai_backend(ctx: RouteContext, cc_payload: dict[str, Any], turn: dict[str, Any]):
     """处理走 OpenAI 兼容后端的 Responses 请求。"""
     cc_payload = normalize_request(cc_payload)
-    _dbg(
-        f'标准化完成：模型={cc_payload.get("model")} '
-        f'工具数={len(cc_payload.get("tools", []))}'
-    )
+    _dbg(f'→ openai  model={cc_payload.get("model")}  tools={len(cc_payload.get("tools", []))}')
 
     url, headers = build_openai_target(ctx)
     cc_payload = apply_body_modifications(cc_payload, ctx.body_modifications)
@@ -153,16 +147,9 @@ def _handle_openai_non_stream(
 
     raw = resp.json()
     attach_upstream_response(turn, raw)
-    _dbg('上游原始响应=' + json.dumps(raw, ensure_ascii=False, default=str)[:1000])
-
     fixed = fix_response(raw)
     response_data = cc_to_responses(fixed, ctx.client_model)
-    return _finalize_responses_response(
-        response_data,
-        client_model=ctx.client_model,
-        turn=turn,
-        debug_label='转换为 Responses 后',
-    )
+    return _finalize_responses_response(response_data, client_model=ctx.client_model, turn=turn)
 
 
 def _handle_openai_stream(
@@ -195,13 +182,13 @@ def _handle_openai_stream(
 
         for chunk in iter_openai_sse(resp):
             if chunk is None:
-                _dbg(f'流式响应结束，共 {chunk_count} 个数据片段')
                 finalized_events = converter.finalize()
                 for item in finalized_events:
                     client_events.append(item)
                     append_client_event(turn, {'type': 'responses_event', 'data': item})
                     yield item
                 usage_tracker.record(ctx.client_model)
+                _dbg(f'stream done  chunks={chunk_count}')
                 set_stream_summary(turn, {
                     'chunk_count': chunk_count,
                     'client_event_count': len(client_events),
@@ -215,22 +202,11 @@ def _handle_openai_stream(
                 return
 
             append_upstream_event(turn, {'type': 'openai_chunk', 'data': chunk})
-            if chunk_count < 10:
-                _dbg(
-                    f'上游原始片段#{chunk_count}='
-                    + json.dumps(chunk, ensure_ascii=False, default=str)[:500]
-                )
-
             chunk = fix_stream_chunk(chunk)
             for out in think_extractor.process_chunk(chunk):
                 for evt in converter.process_cc_chunk(out):
                     client_events.append(evt)
                     append_client_event(turn, {'type': 'responses_event', 'data': evt})
-                    if chunk_count < 10:
-                        _dbg(
-                            f'转换后片段#{chunk_count}='
-                            + json.dumps(out, ensure_ascii=False, default=str)[:500]
-                        )
                     yield evt
 
             chunk_count += 1
@@ -313,11 +289,6 @@ def _handle_responses_stream(
             extracted_usage = _extract_responses_usage(event_data)
             if extracted_usage:
                 last_usage = extracted_usage
-            if event_count < 10:
-                _dbg(
-                    f'上游事件#{event_count} 类型={event_type} 数据='
-                    + json.dumps(event_data, ensure_ascii=False, default=str)[:500]
-                )
             produced = converter.process_responses_event(event_type, event_data)
             for evt in produced:
                 client_events.append(evt)
@@ -325,7 +296,9 @@ def _handle_responses_stream(
                 yield evt
             event_count += 1
 
-        _dbg(f'流式响应结束，共 {event_count} 个事件')
+        in_tok = (last_usage or {}).get('input_tokens', 0)
+        out_tok = (last_usage or {}).get('output_tokens', 0)
+        _dbg(f'stream done  events={event_count}  in={in_tok}  out={out_tok}')
         usage_tracker.record(
             ctx.client_model,
             last_usage,

@@ -67,43 +67,70 @@ docker compose up -d
 
 | 变量 | 说明 | 默认值 |
 |---|---|---|
-| `PROXY_TARGET_URL` | 上游中转站地址 | `https://api.anthropic.com` |
-| `PROXY_API_KEY` | 上游 API 密钥 | |
+| `PROXY_TARGET_URL` | 默认上游中转站地址（未配置中转站时使用） | `https://api.anthropic.com` |
+| `PROXY_API_KEY` | 默认上游 API 密钥 | |
 | `PROXY_PORT` | 服务监听端口 | `3029` |
 | `API_TIMEOUT` | 请求超时（秒） | `300` |
 | `ACCESS_API_KEY` | 访问鉴权密钥，留空不启用 | |
 | `DEBUG` | 兼容旧版调试开关，开启后等价于 `DEBUG_MODE=simple` | `false` |
 | `DEBUG_MODE` | 调试模式：`off` / `simple` / `verbose` | `off` |
 
-### 模型映射
+### 管理面板
 
-在管理面板 (`/admin`) 中配置模型映射：
+访问 `http://localhost:3029/admin` 进入全新的可视化管理面板，采用侧边栏导航布局，包含以下功能模块：
+
+#### 📊 仪表盘
+- 实时统计：请求总数、Token 用量、运行时长
+- 各模型用量明细表
+
+#### 🔗 中转站管理
+- 统一管理多个上游中转站地址和密钥
+- 一键切换当前激活的中转站
+- 所有未单独绑定中转站的模型自动跟随全局激活中转站
+
+**使用场景**：
+- 你有多个中转站（如 A 站、B 站、C 站），可以在此统一添加
+- 通过下拉框一键切换当前激活的中转站，所有模型立即生效
+- 特定模型可以固定绑定到某个中转站，不受全局切换影响
+
+#### 🗺 模型映射
+在此配置 Cursor 模型名到上游模型的映射关系：
 
 - **Cursor 模型名** — 在 Cursor 自定义模型中填入的名称
 - **上游模型名** — 发送到中转站的实际模型名
-- **后端类型** — `openai` (CC 格式) / `anthropic` (Messages 格式) / `responses` (Responses 格式) / `gemini` (Gemini Contents 格式) / `auto` (自动检测)
-- **自定义地址/密钥** — 可选，覆盖全局设置，实现分流到不同中转站
-- **日志模式** — 可在管理面板全局设置中切换 `off` / `simple` / `verbose`
+- **后端类型** — `openai` / `anthropic` / `responses` / `gemini` / `auto`
+- **中转站绑定** — 三种模式：
+  - **跟随全局激活中转站**（默认）
+  - **指定中转站**（固定使用某个中转站）
+  - **自定义地址和密钥**（手动填写 URL/Key）
+- **自定义指令** — 可选，注入到每次请求的 system prompt
+- **Body/Header 修改** — 高级选项，对上游请求做字段级增删改
 
-**示例**：在 Cursor 中添加 `claude-sonnet-4-5-20250929`，映射到上游 `gpt-5.3-codex`，后端选 `openai`。Cursor 会用 CC 格式发送请求，代理直接转发到中转站的 `/v1/chat/completions`。
+**示例**：
+- 在 Cursor 中添加 `claude-sonnet-4-5-20250929`，映射到上游 `gpt-5.3-codex`，后端选 `openai`
+- Cursor 会用 Chat Completions 格式发送请求，代理转发到中转站的 `/v1/chat/completions`
 
-如果你的中转站只支持 `/v1/responses`，可以把后端类型选成 `responses`。此时代理会把 Cursor 发来的请求转换或透传为 Responses 格式，再发往中转站的 `/v1/responses`。
+> **提示**：使用 Claude 风格的模型名（如 `claude-sonnet-*`）可以让 Cursor 显示思考过程（thinking）。
 
-> **提示**：使用 Claude 风格的模型名（如 `claude-sonnet-4-5-20250929`）可以让 Cursor 显示思考过程（thinking）。
+#### ⚙️ 全局设置
+- 默认中转站地址和密钥（作为兜底配置）
+- 日志模式切换：`off` / `simple` / `verbose`
+
+#### 📋 对话日志
+开启 `verbose` 日志模式后，可在此查看所有对话记录：
+- 按日期分组的文件树
+- 点击任意对话查看完整请求/响应详情
+- 支持单条删除
 
 ### 调试日志模式
 
-项目支持三档调试模式，可通过环境变量 `DEBUG_MODE` 或管理面板全局设置切换：
+项目支持三档调试模式，可通过环境变量 `DEBUG_MODE` 或管理面板「全局设置」切换：
 
 - `off` — 关闭调试日志
 - `simple` — 仅输出控制台调试日志，不写文件
 - `verbose` — 输出控制台调试日志，并写入详细的对话级文件日志
 
-详细日志会写入：
-
-```text
-data/conversations/YYYY-MM-DD/{conversation_id}.json
-```
+详细日志会写入 `data/conversations/YYYY-MM-DD/{conversation_id}.json`，可在管理面板「📋 对话日志」页面查看。
 
 特性：
 - 同一段多轮对话聚合到同一个文件
@@ -125,25 +152,29 @@ api2cursor/
 ├── start.py                    # 启动入口
 ├── app.py                      # Flask 应用工厂
 ├── config.py                   # 环境变量配置
-├── settings.py                 # 持久化配置管理
+├── settings.py                 # 持久化配置管理（支持多中转站）
 ├── routes/                     # 路由层：按对外 API 入口拆分
 │   ├── chat.py                 #   /v1/chat/completions
 │   ├── responses.py            #   /v1/responses
 │   ├── messages.py             #   /v1/messages（透传）
-│   ├── admin.py                #   管理面板 + API
+│   ├── admin.py                #   管理面板 + API（含日志查看接口）
 │   └── common.py               #   路由公共上下文、日志与 SSE 辅助
 ├── adapters/                   # 适配层：按协议桥接职责拆分
 │   ├── cc_anthropic_adapter.py #   Chat Completions ↔ Anthropic Messages
+│   ├── cc_gemini_adapter.py    #   Chat Completions ↔ Gemini Contents
 │   ├── openai_compat_fixer.py  #   OpenAI / Chat Completions 兼容修复
 │   └── responses_cc_adapter.py #   Responses ↔ Chat Completions + 原生 Responses 流桥接
 ├── utils/                      # 通用工具层
 │   ├── http.py                 #   请求转发、SSE 解析
+│   ├── request_logger.py       #   对话级文件日志
 │   ├── tool_fixer.py           #   工具参数修复
-│   └── think_tag.py            #   <think> 标签提取
-└── static/                     # 管理面板前端
-    ├── admin.html
-    ├── admin.css
-    └── admin.js
+│   ├── think_tag.py            #   <think> 标签提取
+│   ├── thinking_cache.py       #   thinking 内容缓存
+│   └── usage_tracker.py        #   用量统计
+└── static/                     # 管理面板前端（全新设计）
+    ├── admin.html              #   侧边栏布局 + 多页面路由
+    ├── admin.css               #   深紫/靛蓝主题样式
+    └── admin.js                #   SPA 路由 + 日志查看器
 ```
 
 ## 兼容性修复
@@ -162,3 +193,41 @@ api2cursor/
 ## 许可证
 
 [MIT](LICENSE)
+
+## 典型使用场景
+
+### 场景一：使用单个中转站
+
+这是最简单的场景，适合只有一个 OpenAI 兼容中转站的用户。
+
+1. 启动服务后进入管理面板 `http://localhost:3029/admin`
+2. 在「🔗 中转站管理」添加你的中转站地址和密钥，并激活它
+3. 在「🗺 模型映射」添加你想在 Cursor 中使用的模型名和对应的上游模型
+4. 在 Cursor 设置 → Models 中：
+   - 添加自定义模型，名称填写上面配置的 Cursor 模型名
+   - Override OpenAI Base URL 填 `http://localhost:3029`
+   - API Key 填 `ACCESS_API_KEY` 的值（未配置则随便填）
+
+### 场景二：多个中转站按需切换
+
+适合同时持有多家中转站账号，需要灵活切换的场景。
+
+1. 在「🔗 中转站管理」把所有中转站都添加进来（如 relay-a、relay-b、relay-c）
+2. 通过顶部下拉框随时切换当前激活的中转站，所有模型立即生效
+3. 无需修改任何模型映射，Cursor 侧配置也无需变动
+
+### 场景三：不同模型走不同中转站
+
+适合不同模型分散在不同中转站的场景（如 Claude 走 A 站，GPT 走 B 站）。
+
+1. 添加所有中转站
+2. 在每条模型映射中，将「中转站来源」设为「指定中转站」并绑定对应的中转站
+3. 这些模型会固定走绑定的中转站，不受全局激活切换影响
+
+### 场景四：让 Cursor 显示 Thinking（思考过程）
+
+Cursor 对 Claude 风格的模型名有特殊处理，会显示 thinking 内容。
+
+1. 在 Cursor 模型名中使用 `claude-*` 格式（如 `claude-sonnet-4-5-20250929`）
+2. 即使上游实际模型不是 Claude，Cursor 也会渲染 thinking 内容
+3. 代理会自动从 `<think>` 标签或 `reasoning_content` 字段中提取并转换

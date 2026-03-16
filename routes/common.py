@@ -93,17 +93,17 @@ def build_gemini_target(ctx: RouteContext, stream: bool = False) -> tuple[str, d
 
 
 def log_route_context(route_name: str, ctx: RouteContext, *, extra: str = '') -> None:
-    """统一输出路由级日志，避免不同入口的日志格式逐渐漂移。"""
-    parts = [
-        f'[{route_name}]',
-        f'模型={ctx.client_model}',
-        f'上游模型={ctx.upstream_model}',
-        f'后端={ctx.backend}',
-        f'流式={ctx.is_stream}',
-    ]
+    """Log a one-line request summary at the start of each route."""
+    stream_flag = 'stream' if ctx.is_stream else 'sync'
+    model_part = (
+        f'{ctx.client_model} → {ctx.upstream_model}'
+        if ctx.client_model != ctx.upstream_model
+        else ctx.client_model
+    )
+    parts = [f'[{route_name}]', model_part, f'backend={ctx.backend}', stream_flag]
     if extra:
         parts.append(extra)
-    logger.info(' '.join(parts))
+    logger.info('  '.join(parts))
 
 
 def log_usage(
@@ -118,7 +118,7 @@ def log_usage(
     不同协议对 usage 字段命名不一致，这里只接收字段名，不在调用方重复拼接日志文案。
     """
     logger.info(
-        '[%s] 请求完成 输入令牌=%s 输出令牌=%s',
+        '[%s] done  in=%s  out=%s',
         route_name,
         usage.get(input_key, 0),
         usage.get(output_key, 0),
@@ -176,7 +176,7 @@ def inject_instructions_cc(payload: dict[str, Any], instructions: str, position:
         messages.insert(0, {'role': 'system', 'content': instructions})
         payload['messages'] = messages
 
-    logger.info('已注入自定义指令到 CC system 消息 (%d 字符, %s)', len(instructions), position)
+    logger.debug('injected custom instructions into CC system message (%d chars, %s)', len(instructions), position)
     return payload
 
 
@@ -191,7 +191,7 @@ def inject_instructions_responses(payload: dict[str, Any], instructions: str, po
     existing = payload.get('instructions') or ''
     payload['instructions'] = _merge_text(instructions, existing, position)
 
-    logger.info('已注入自定义指令到 Responses instructions (%d 字符, %s)', len(instructions), position)
+    logger.debug('injected custom instructions into Responses instructions (%d chars, %s)', len(instructions), position)
     return payload
 
 
@@ -211,7 +211,7 @@ def inject_instructions_anthropic(payload: dict[str, Any], instructions: str, po
         )
     payload['system'] = _merge_text(instructions, existing, position)
 
-    logger.info('已注入自定义指令到 Anthropic system (%d 字符, %s)', len(instructions), position)
+    logger.debug('injected custom instructions into Anthropic system (%d chars, %s)', len(instructions), position)
     return payload
 
 
@@ -230,7 +230,7 @@ def apply_body_modifications(payload: dict[str, Any], modifications: dict[str, A
             payload.pop(key, None)
         else:
             payload[key] = value
-    logger.info('已应用 body_modifications: %s', list(modifications.keys()))
+    logger.debug('applied body_modifications: %s', list(modifications.keys()))
     return payload
 
 
@@ -246,5 +246,5 @@ def apply_header_modifications(headers: dict[str, str], modifications: dict[str,
             headers.pop(key, None)
         else:
             headers[key] = str(value)
-    logger.info('已应用 header_modifications: %s', list(modifications.keys()))
+    logger.debug('applied header_modifications: %s', list(modifications.keys()))
     return headers

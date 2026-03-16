@@ -102,6 +102,7 @@ const PAGE_TITLES = {
   mappings: '模型映射',
   settings: '全局设置',
   logs: '对话日志',
+  livelog: '实时日志',
 };
 
 function navigate(page) {
@@ -119,6 +120,8 @@ function navigate(page) {
   if (page === 'mappings') loadMappings();
   if (page === 'settings') loadSettings();
   if (page === 'logs') loadLogs();
+  if (page === 'livelog') startLivelog();
+  else stopLivelog();
 }
 
 // ─── 初始化 ──────────────────────────────────────
@@ -685,6 +688,89 @@ async function deleteCurrentLog() {
     document.getElementById('logDetailBody').innerHTML = '<div class="log-empty"><div class="log-empty-icon">📂</div>选择左侧对话查看详情</div>';
     loadLogs();
   } catch (e) { toast('删除失败: ' + e.message, false); }
+}
+
+// ─── 实时日志 ─────────────────────────────────────
+let _livelogTimer = null;
+let _livelogSince = 0;
+let _livelogAllEntries = [];   // 所有已收到的条目（用于前端过滤）
+let _livelogFilterLevel = '';
+
+function startLivelog() {
+  _livelogSince = 0;
+  _livelogAllEntries = [];
+  _livelogFilterLevel = document.getElementById('livelogFilter')?.value || '';
+  document.getElementById('livelogBody').innerHTML = '<div style="color:var(--muted)">连接中…</div>';
+  _pollLivelog();
+}
+
+function stopLivelog() {
+  if (_livelogTimer) { clearTimeout(_livelogTimer); _livelogTimer = null; }
+}
+
+async function _pollLivelog() {
+  _livelogTimer = null;
+  if (_currentPage !== 'livelog') return;
+  const paused = document.getElementById('livelogPause')?.checked;
+  if (!paused) {
+    try {
+      const data = await apiFetch('/api/admin/live-logs?since=' + _livelogSince);
+      if (data.logs && data.logs.length) {
+        _livelogAllEntries.push(...data.logs);
+        _livelogSince = data.total;
+        _renderLivelog(data.logs);
+      } else if (_livelogAllEntries.length === 0) {
+        document.getElementById('livelogBody').innerHTML = '<div style="color:var(--muted)">等待日志输出…</div>';
+      }
+    } catch { /* ignore */ }
+  }
+  _livelogTimer = setTimeout(_pollLivelog, 1500);
+}
+
+function _renderLivelog(entries) {
+  const body = document.getElementById('livelogBody');
+  const filter = _livelogFilterLevel;
+  const autoScroll = document.getElementById('livelogAutoScroll')?.checked;
+
+  // 首次加载：清空占位
+  if (body.children.length === 1 && body.firstElementChild?.style?.color?.includes('muted') ||
+      body.innerHTML.includes('等待') || body.innerHTML.includes('连接')) {
+    body.innerHTML = '';
+  }
+
+  for (const e of entries) {
+    if (filter && e.level !== filter) continue;
+    const line = document.createElement('div');
+    line.className = 'llline llline-' + e.level.toLowerCase();
+    line.innerHTML =
+      `<span class="ll-ts">${esc(e.ts)}</span>` +
+      `<span class="ll-lvl ll-${e.level.toLowerCase()}">${esc(e.level)}</span>` +
+      `<span class="ll-logger">${esc(e.logger)}</span>` +
+      `<span class="ll-msg">${esc(e.msg)}</span>`;
+    body.appendChild(line);
+  }
+
+  // 最多保留 2000 行 DOM
+  while (body.children.length > 2000) body.removeChild(body.firstChild);
+
+  if (autoScroll) body.scrollTop = body.scrollHeight;
+}
+
+function applyLivelogFilter() {
+  _livelogFilterLevel = document.getElementById('livelogFilter').value;
+  // 重新用已缓存条目渲染
+  const body = document.getElementById('livelogBody');
+  body.innerHTML = '';
+  const filtered = _livelogFilterLevel
+    ? _livelogAllEntries.filter(e => e.level === _livelogFilterLevel)
+    : _livelogAllEntries;
+  _renderLivelog(filtered);
+}
+
+function clearLivelog() {
+  _livelogAllEntries = [];
+  _livelogSince = 0;
+  document.getElementById('livelogBody').innerHTML = '<div style="color:var(--muted)">已清空，等待新日志…</div>';
 }
 
 // ─── 初始化入口 ───────────────────────────────────

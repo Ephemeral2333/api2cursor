@@ -14,8 +14,14 @@ from flask_cors import CORS
 import settings
 from config import Config
 from routes import register_routes
+from utils.log_buffer import MemoryLogHandler
 
 logger = logging.getLogger(__name__)
+
+_mem_handler = MemoryLogHandler()
+_mem_handler.setFormatter(logging.Formatter('%(message)s'))
+_mem_handler.setLevel(logging.DEBUG)
+logging.getLogger().addHandler(_mem_handler)
 
 
 def create_app():

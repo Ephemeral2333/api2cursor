@@ -220,6 +220,21 @@ select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%
 .empty{text-align:center;padding:48px 20px;color:var(--muted)}
 .empty-icon{font-size:40px;margin-bottom:12px;opacity:.4}
 
+/* ─── 实时日志 ──────────────────────────────────── */
+.llline{display:flex;gap:0;flex-wrap:nowrap;min-height:20px;padding:1px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.llline:hover{background:rgba(255,255,255,.03)}
+.ll-ts{flex-shrink:0;color:#4a5280;width:88px;margin-right:8px;user-select:none}
+.ll-lvl{flex-shrink:0;width:64px;margin-right:8px;font-weight:700;text-align:left}
+.ll-debug{color:#6b7499}
+.ll-info{color:#22d3ee}
+.ll-warning{color:#fbbf24}
+.ll-error{color:#f87171}
+.ll-critical{color:#f87171;text-decoration:underline}
+.ll-logger{flex-shrink:0;width:140px;margin-right:10px;color:#5a6490;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ll-msg{flex:1;color:#c8d0f0;white-space:pre-wrap;word-break:break-all}
+.llline-warning .ll-msg{color:#fde68a}
+.llline-error .ll-msg,.llline-critical .ll-msg{color:#fca5a5}
+
 /* ─── 响应式 ────────────────────────────────────── */
 @media(max-width:700px){
   :root{--sidebar-w:0px}
