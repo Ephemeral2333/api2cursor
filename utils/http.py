@@ -7,7 +7,12 @@ import logging
 import uuid
 from typing import Any, Iterator
 
-import requests
+try:
+    from curl_cffi import requests
+    _IMPERSONATE = 'chrome120'
+except ImportError:
+    import requests  # type: ignore
+    _IMPERSONATE = None
 from flask import Response, jsonify
 
 from config import Config
@@ -83,10 +88,10 @@ def forward_request(url, headers, payload, stream=False):
         失败（非流式）: (None, Flask Response)
     """
     try:
-        resp = requests.post(
-            url, headers=headers, json=payload,
-            timeout=Config.API_TIMEOUT, stream=stream,
-        )
+        kwargs: dict = dict(headers=headers, json=payload, timeout=Config.API_TIMEOUT, stream=stream)
+        if _IMPERSONATE:
+            kwargs['impersonate'] = _IMPERSONATE
+        resp = requests.post(url, **kwargs)
         if resp.status_code != 200:
             body = resp.content.decode('utf-8', errors='replace')
             logger.warning(f'上游返回 {resp.status_code}: {body[:300]}')
@@ -97,7 +102,7 @@ def forward_request(url, headers, payload, stream=False):
                 content_type=resp.headers.get('Content-Type', 'application/json'),
             )
         return resp, None
-    except requests.RequestException as e:
+    except Exception as e:
         logger.error(f'请求上游失败: {e}')
         if stream:
             return None, str(e)

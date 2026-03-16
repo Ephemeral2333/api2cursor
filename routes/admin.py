@@ -402,18 +402,6 @@ def get_log(date, conv_id):
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/api/admin/live-logs', methods=['GET'])
-def live_logs():
-    """返回内存中最近的日志条目，支持增量拉取。"""
-    err = _check_auth()
-    if err:
-        return err
-    from utils.log_buffer import get_logs
-    since = request.args.get('since', 0, type=int)
-    logs, total = get_logs(since)
-    return jsonify({'logs': logs, 'total': total})
-
-
 @bp.route('/api/admin/logs/<date>/<conv_id>', methods=['DELETE'])
 def delete_log(date, conv_id):
     """删除指定对话日志文件。"""
