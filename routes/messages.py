@@ -14,7 +14,7 @@ from flask import Blueprint, request, jsonify
 import settings
 from config import Config
 from routes.common import apply_body_modifications, apply_header_modifications, inject_instructions_anthropic
-from utils.http import build_anthropic_headers, forward_request, sse_response
+from utils.http import build_anthropic_headers, forward_request, read_error_response, sse_response
 from utils.request_logger import (
     append_client_event,
     append_upstream_event,
@@ -90,7 +90,7 @@ def messages_passthrough():
                 timeout=Config.API_TIMEOUT, stream=True,
             )
             if resp.status_code != 200:
-                body = resp.content.decode('utf-8', errors='replace')
+                _, body = read_error_response(resp)
                 logger.warning(f'上游返回 {resp.status_code}: {body[:300]}')
                 attach_error(turn, {'stage': 'upstream_status', 'status_code': resp.status_code, 'message': body})
                 set_stream_summary(turn, {'status': 'error'})
