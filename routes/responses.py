@@ -87,6 +87,12 @@ def responses_endpoint():
         request_headers=dict(request.headers),
         target_url=ctx.target_url,
         upstream_model=ctx.upstream_model,
+        relay_label=ctx.relay_label,
+        relay_source=ctx.relay_source,
+        metadata={
+            'relay_label': ctx.relay_label,
+            'relay_source': ctx.relay_source,
+        },
     )
     log_route_context('responses', ctx)
 

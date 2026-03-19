@@ -146,6 +146,7 @@ def resolve_model(model_name):
     mappings = current.get('model_mappings', {})
     relay_profiles = current.get('relay_profiles', {})
     base_url, base_key = _resolve_global_target(current)
+    active_relay = str(current.get('active_relay', '') or '').strip()
 
     if model_name in mappings:
         m = mappings[model_name]
@@ -154,18 +155,41 @@ def resolve_model(model_name):
             backend = _auto_detect(model_name)
         relay_name = str(m.get('relay_profile', '') or '').strip()
         relay = relay_profiles.get(relay_name, {}) if relay_name else {}
+        has_custom_target = bool(str(m.get('target_url', '') or '').strip())
+        has_custom_key = bool(str(m.get('api_key', '') or ''))
+        if has_custom_target or has_custom_key:
+            relay_label = '自定义地址/密钥'
+            relay_source = 'mapping_custom'
+        elif relay_name in relay_profiles:
+            relay_label = relay_name
+            relay_source = 'mapping_relay'
+        elif active_relay in relay_profiles:
+            relay_label = active_relay
+            relay_source = 'active_relay'
+        else:
+            relay_label = '全局默认'
+            relay_source = 'global_default'
         return {
             'upstream_model': m.get('upstream_model') or model_name,
             'backend': backend,
             'target_url': str(m.get('target_url') or relay.get('base_url') or base_url).strip(),
             'api_key': str(m.get('api_key') or relay.get('api_key') or base_key),
             'relay_profile': relay_name if relay_name in relay_profiles else '',
-            'active_relay': current.get('active_relay', ''),
+            'active_relay': active_relay,
+            'relay_label': relay_label,
+            'relay_source': relay_source,
             'custom_instructions': m.get('custom_instructions') or '',
             'instructions_position': m.get('instructions_position') or 'prepend',
             'body_modifications': m.get('body_modifications') or {},
             'header_modifications': m.get('header_modifications') or {},
         }
+
+    if active_relay in relay_profiles:
+        relay_label = active_relay
+        relay_source = 'active_relay'
+    else:
+        relay_label = '全局默认'
+        relay_source = 'global_default'
 
     return {
         'upstream_model': model_name,
@@ -173,7 +197,9 @@ def resolve_model(model_name):
         'target_url': base_url,
         'api_key': base_key,
         'relay_profile': '',
-        'active_relay': current.get('active_relay', ''),
+        'active_relay': active_relay,
+        'relay_label': relay_label,
+        'relay_source': relay_source,
         'custom_instructions': '',
         'instructions_position': 'prepend',
         'body_modifications': {},

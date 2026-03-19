@@ -40,6 +40,8 @@ def start_turn(
     request_headers: dict[str, Any] | None = None,
     target_url: str = '',
     upstream_model: str = '',
+    relay_label: str = '',
+    relay_source: str = '',
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """创建一条新的对话 turn 上下文。"""
@@ -58,6 +60,8 @@ def start_turn(
         'stream': stream,
         'target_url': target_url,
         'upstream_model': upstream_model,
+        'relay_label': relay_label,
+        'relay_source': relay_source,
         'started_at': now,
         'updated_at': now,
         'request_headers': sanitize_headers(request_headers or {}),

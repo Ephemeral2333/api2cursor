@@ -32,6 +32,8 @@ class RouteContext:
     target_url: str
     api_key: str
     is_stream: bool
+    relay_label: str
+    relay_source: str
     custom_instructions: str
     instructions_position: str
     body_modifications: dict
@@ -48,6 +50,8 @@ def build_route_context(client_model: str, is_stream: bool) -> RouteContext:
         target_url=mapping['target_url'],
         api_key=mapping['api_key'],
         is_stream=is_stream,
+        relay_label=mapping.get('relay_label', ''),
+        relay_source=mapping.get('relay_source', ''),
         custom_instructions=mapping.get('custom_instructions', ''),
         instructions_position=mapping.get('instructions_position', 'prepend'),
         body_modifications=mapping.get('body_modifications', {}),
@@ -100,7 +104,17 @@ def log_route_context(route_name: str, ctx: RouteContext, *, extra: str = '') ->
         if ctx.client_model != ctx.upstream_model
         else f'模型={ctx.client_model}'
     )
+    relay_source_labels = {
+        'mapping_custom': '模型自定义',
+        'mapping_relay': '模型绑定',
+        'active_relay': '当前激活',
+        'global_default': '全局默认',
+    }
     parts = [f'[{route_name}]', model_part, f'后端={ctx.backend}', stream_flag]
+    if ctx.relay_label:
+        parts.append(f'中转站={ctx.relay_label}')
+    if ctx.relay_source:
+        parts.append(f'来源={relay_source_labels.get(ctx.relay_source, ctx.relay_source)}')
     if extra:
         parts.append(extra)
     logger.info('  '.join(parts))

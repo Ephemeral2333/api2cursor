@@ -121,7 +121,13 @@ def chat_completions():
         request_headers=dict(request.headers),
         target_url=ctx.target_url,
         upstream_model=ctx.upstream_model,
-        metadata={'message_count': message_count},
+        relay_label=ctx.relay_label,
+        relay_source=ctx.relay_source,
+        metadata={
+            'message_count': message_count,
+            'relay_label': ctx.relay_label,
+            'relay_source': ctx.relay_source,
+        },
     )
 
     log_route_context('chat', ctx, extra=f'消息数={message_count}')

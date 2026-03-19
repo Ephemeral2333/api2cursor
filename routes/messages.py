@@ -40,11 +40,11 @@ def messages_passthrough():
     model = payload.get('model', 'unknown')
     is_stream = payload.get('stream', False)
 
-    logger.info(f'[透传] model={model} 流式={is_stream}')
-
     mapping = settings.resolve_model(model)
     url_base = mapping['target_url']
     api_key = mapping['api_key']
+    relay_label = mapping.get('relay_label', '')
+    relay_source = mapping.get('relay_source', '')
     custom_instructions = mapping.get('custom_instructions', '')
     instructions_position = mapping.get('instructions_position', 'prepend')
     body_mods = mapping.get('body_modifications', {})
@@ -53,6 +53,12 @@ def messages_passthrough():
     headers = apply_header_modifications(headers, header_mods)
     url = f'{url_base.rstrip("/")}/v1/messages'
 
+    relay_source_labels = {
+        'mapping_custom': '模型自定义',
+        'mapping_relay': '模型绑定',
+        'active_relay': '当前激活',
+        'global_default': '全局默认',
+    }
     turn = start_turn(
         route='messages',
         client_model=model,
@@ -62,6 +68,20 @@ def messages_passthrough():
         request_headers=dict(request.headers),
         target_url=url_base,
         upstream_model=model,
+        relay_label=relay_label,
+        relay_source=relay_source,
+        metadata={
+            'relay_label': relay_label,
+            'relay_source': relay_source,
+        },
+    )
+
+    logger.info(
+        '[messages] 模型=%s  后端=anthropic  %s  中转站=%s  来源=%s',
+        model,
+        '流式' if is_stream else '同步',
+        relay_label or '未知',
+        relay_source_labels.get(relay_source, relay_source or 'unknown'),
     )
 
     payload = inject_instructions_anthropic(payload, custom_instructions, instructions_position)
