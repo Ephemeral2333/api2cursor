@@ -40,7 +40,46 @@ Cursor                         API 2 Cursor                           中转站
 
 ## 快速开始
 
-### 直接运行
+### Docker 后台运行（推荐）
+
+```bash
+cd api2cursor
+cp .env.example .env
+# 编辑 .env 填入中转站地址和密钥
+docker compose up -d
+```
+
+常用管理命令：
+
+```bash
+docker compose logs -f        # 实时查看日志
+docker compose restart        # 重启
+docker compose down           # 停止并移除容器
+```
+
+### Linux 直接后台运行
+
+```bash
+cd api2cursor
+pip install -r requirements.txt
+cp .env.example .env
+# 编辑 .env 填入中转站地址和密钥
+chmod +x run.sh
+./run.sh start                # 后台启动
+```
+
+其他管理命令：
+
+```bash
+./run.sh status               # 查看运行状态
+./run.sh logs                 # 实时查看日志
+./run.sh restart              # 重启
+./run.sh stop                 # 停止
+```
+
+日志写入当前目录的 `api2cursor.log`，PID 记录在 `api2cursor.pid`。
+
+### 直接前台运行
 
 ```bash
 cd api2cursor
@@ -48,15 +87,6 @@ pip install -r requirements.txt
 cp .env.example .env
 # 编辑 .env 填入中转站地址和密钥
 python start.py
-```
-
-### Docker 部署
-
-```bash
-cd api2cursor
-cp .env.example .env
-# 编辑 .env
-docker compose up -d
 ```
 
 服务启动后访问 `http://localhost:3029/admin` 进入管理面板。
