@@ -115,7 +115,7 @@ def messages_passthrough():
                 attach_error(turn, {'stage': 'upstream_status', 'status_code': resp.status_code, 'message': body})
                 set_stream_summary(turn, {'status': 'error'})
                 finalize_turn(turn)
-                yield f'data: {json.dumps({"error": {"message": body, "type": "upstream_error"}})}\n\n'
+                yield f'data: {json.dumps({"error": {"message": body, "type": "upstream_error"}}, ensure_ascii=False)}\n\n'
                 return
 
             summary = {'upstream_event_count': 0, 'client_event_count': 0}
@@ -134,7 +134,7 @@ def messages_passthrough():
             attach_error(turn, {'stage': 'request_exception', 'message': str(e)})
             set_stream_summary(turn, {'status': 'error'})
             finalize_turn(turn)
-            yield f'data: {json.dumps({"error": {"message": str(e), "type": "proxy_error"}})}\n\n'
+            yield f'data: {json.dumps({"error": {"message": str(e), "type": "proxy_error"}}, ensure_ascii=False)}\n\n'
 
     return sse_response(generate())
 
@@ -220,7 +220,7 @@ def _process_stream(resp, *, turn=None, summary: dict[str, int] | None = None):
             event_data['index'] = event_data['index'] + index_offset
             modified = True
 
-        output = f'data: {json.dumps(event_data)}\n\n' if modified else decoded + '\n\n'
+        output = f'data: {json.dumps(event_data, ensure_ascii=False)}\n\n' if modified else decoded + '\n\n'
         append_client_event(turn, {'raw': output})
         summary['client_event_count'] += 1
         yield output
@@ -230,13 +230,13 @@ def _emit_thinking_blocks(text):
     """生成一组等价的 Anthropic thinking block SSE 事件。"""
     yield (
         f'event: content_block_start\n'
-        f'data: {json.dumps({"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": ""}})}\n\n'
+        f'data: {json.dumps({"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": ""}}, ensure_ascii=False)}\n\n'
     )
     yield (
         f'event: content_block_delta\n'
-        f'data: {json.dumps({"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": text}})}\n\n'
+        f'data: {json.dumps({"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": text}}, ensure_ascii=False)}\n\n'
     )
     yield (
         f'event: content_block_stop\n'
-        f'data: {json.dumps({"type": "content_block_stop", "index": 0})}\n\n'
+        f'data: {json.dumps({"type": "content_block_stop", "index": 0}, ensure_ascii=False)}\n\n'
     )

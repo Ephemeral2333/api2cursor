@@ -237,7 +237,7 @@ class AnthropicStreamConverter:
     @staticmethod
     def _dump_chunk(chunk: JsonDict) -> str:
         """统一序列化 chunk，方便上层直接写入 SSE data。"""
-        return json.dumps(chunk)
+        return json.dumps(chunk, ensure_ascii=False)
 
 
 # ═══════════════════════════════════════════════════════════
