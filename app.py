@@ -31,6 +31,10 @@ def create_app():
     访问鉴权、健康检查以及蓝图注册。
     """
     app = Flask(__name__)
+    # Keep Chinese text readable in JSON responses instead of escaping it as \uXXXX.
+    app.config['JSON_AS_ASCII'] = False
+    if hasattr(app, 'json'):
+        app.json.ensure_ascii = False
     CORS(app)
     settings.load()
 

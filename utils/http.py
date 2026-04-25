@@ -63,7 +63,7 @@ def sse_response(generator):
     """Wrap a generator as an SSE response."""
     return Response(
         generator,
-        content_type='text/event-stream',
+        content_type='text/event-stream; charset=utf-8',
         headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
     )
 
