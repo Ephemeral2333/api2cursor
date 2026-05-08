@@ -5,6 +5,7 @@ Anthropic Messages API 透传。当 Cursor 直接发送 Anthropic 格式请求�
 将其注入为标准的 thinking blocks。
 """
 
+import copy
 import json
 import logging
 
@@ -36,7 +37,7 @@ bp = Blueprint('messages', __name__)
 def messages_passthrough():
     """透传 Anthropic Messages 请求，并在必要时补齐 thinking 兼容层。"""
     original_payload = request.get_json(force=True)
-    payload = json.loads(json.dumps(original_payload, ensure_ascii=False, default=str))
+    payload = copy.deepcopy(original_payload)
     model = payload.get('model', 'unknown')
     is_stream = payload.get('stream', False)
 

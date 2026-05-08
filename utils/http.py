@@ -117,7 +117,7 @@ def forward_request(url, headers, payload, stream=False):
 
         import settings as _settings
 
-        proxy = _settings.get().get('upstream_proxy', '').strip() or Config.UPSTREAM_PROXY
+        proxy = _settings.get_upstream_proxy()
         if proxy:
             kwargs['proxies'] = {'https': proxy, 'http': proxy}
 

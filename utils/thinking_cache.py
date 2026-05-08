@@ -138,8 +138,8 @@ class ThinkingCache:
         return _TOOL_ID_RE.sub('', tid)
 
     def _cleanup(self) -> None:
-        """惰性清理过期条目（每 100 次写入触发一次全量扫描）。"""
-        if len(self._store) < 100:
+        """惰性清理过期条目（超过 20 条时触发）。"""
+        if len(self._store) < 20:
             return
         now = time.time()
         expired = [k for k, (_, ts) in self._store.items() if (now - ts) >= _TTL]

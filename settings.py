@@ -141,6 +141,14 @@ def get_debug_mode():
     return mode if mode in ('off', 'simple', 'verbose') else Config.DEBUG_MODE
 
 
+def get_upstream_proxy() -> str:
+    """返回当前生效的上游代理，直接读内存缓存，不做深拷贝。"""
+    with _lock:
+        if _cache is None:
+            return Config.UPSTREAM_PROXY
+        return str(_cache.get('upstream_proxy', '') or '').strip() or Config.UPSTREAM_PROXY
+
+
 def resolve_model(model_name):
     """根据客户端模型名解析完整的上游路由配置。"""
     current = get()

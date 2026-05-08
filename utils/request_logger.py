@@ -256,26 +256,27 @@ def _get_lock(conversation_id: str) -> threading.Lock:
 
 
 def _append_stream_event(stream_trace: dict[str, Any], kind: str, event: Any) -> None:
-    events_key = f'{kind}_events'
     total_key = f'{kind}_total'
     dropped_key = f'{kind}_dropped'
+    head_key = f'_{kind}_head'
+    tail_key = f'_{kind}_tail'
 
-    events = stream_trace.setdefault(events_key, [])
-    stream_trace[total_key] = stream_trace.get(total_key, 0) + 1
+    total = stream_trace.get(total_key, 0)
+    stream_trace[total_key] = total + 1
 
-    # 前 KEEP_HEAD 条完整保留；之后只保留最后 KEEP_TAIL 条，
-    # 中间部分通过 dropped 计数折叠，避免文件膨胀。
-    if len(events) < (_STREAM_KEEP_HEAD + _STREAM_KEEP_TAIL):
-        events.append(event)
-        return
+    if total < _STREAM_KEEP_HEAD:
+        stream_trace.setdefault(head_key, []).append(event)
+    else:
+        tail: list = stream_trace.setdefault(tail_key, [])
+        if len(tail) >= _STREAM_KEEP_TAIL:
+            tail.pop(0)
+            stream_trace[dropped_key] = stream_trace.get(dropped_key, 0) + 1
+        tail.append(event)
 
-    head = events[:_STREAM_KEEP_HEAD]
-    tail = events[_STREAM_KEEP_HEAD:]
-    if len(tail) >= _STREAM_KEEP_TAIL:
-        tail.pop(0)
-        stream_trace[dropped_key] = stream_trace.get(dropped_key, 0) + 1
-    tail.append(event)
-    stream_trace[events_key] = head + tail
+    # 合并视图仅在读取时构造（finalize_turn 调用前）
+    stream_trace[f'{kind}_events'] = (
+        stream_trace.get(head_key, []) + stream_trace.get(tail_key, [])
+    )
 
 
 def _touch(turn: dict[str, Any] | None) -> None:

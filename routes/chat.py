@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from typing import Any
@@ -84,6 +85,10 @@ def _dbg(message: str) -> None:
         logger.info('[chat:dbg] %s', message)
 
 
+def _is_verbose() -> bool:
+    return settings.get_debug_mode() == 'verbose'
+
+
 def _extract_responses_usage(event_data: dict[str, Any]) -> dict[str, Any] | None:
     """从原生 Responses 事件中提取 usage。
 
@@ -107,7 +112,7 @@ def _extract_responses_usage(event_data: dict[str, Any]) -> dict[str, Any] | Non
 def chat_completions():
     """处理聊天补全请求并按模型映射分发到不同后端。"""
     original_payload = request.get_json(force=True)
-    payload, message_count = _normalize_chat_payload(json.loads(json.dumps(original_payload, ensure_ascii=False, default=str)))
+    payload, message_count = _normalize_chat_payload(copy.deepcopy(original_payload))
 
     client_model = payload.get('model', 'unknown')
     is_stream = payload.get('stream', False)
@@ -252,7 +257,8 @@ def _handle_openai_stream(
                 finalize_turn(turn, usage=last_usage)
                 return
 
-            append_upstream_event(turn, {'type': 'openai_chunk', 'data': chunk})
+            if _is_verbose():
+                append_upstream_event(turn, {'type': 'openai_chunk', 'data': chunk})
             if chunk.get('usage'):
                 last_usage = chunk['usage']
 
@@ -261,7 +267,8 @@ def _handle_openai_stream(
 
             for out in think_extractor.process_chunk(chunk):
                 client_chunks.append(out)
-                append_client_event(turn, {'type': 'chat_chunk', 'data': out})
+                if _is_verbose():
+                    append_client_event(turn, {'type': 'chat_chunk', 'data': out})
                 yield sse_data_message(out)
 
             chunk_count += 1
@@ -352,7 +359,8 @@ def _handle_responses_stream(
         client_chunks: list[Any] = []
         last_usage: dict[str, Any] | None = None
         for event_type, event_data in iter_responses_sse(resp):
-            append_upstream_event(turn, {'type': event_type, 'data': event_data})
+            if _is_verbose():
+                append_upstream_event(turn, {'type': event_type, 'data': event_data})
             extracted_usage = _extract_responses_usage(event_data)
             if extracted_usage:
                 last_usage = {
@@ -363,7 +371,8 @@ def _handle_responses_stream(
 
             for chunk in converter.process_event(event_type, event_data):
                 client_chunks.append(chunk)
-                append_client_event(turn, {'type': 'chat_chunk', 'data': chunk})
+                if _is_verbose():
+                    append_client_event(turn, {'type': 'chat_chunk', 'data': chunk})
                 if isinstance(chunk, dict) and isinstance(chunk.get('usage'), dict):
                     last_usage = chunk['usage']
                 yield sse_data_message(chunk)
@@ -452,7 +461,8 @@ def _handle_gemini_stream(
         client_chunks: list[Any] = []
         last_usage: dict[str, Any] | None = None
         for gemini_chunk in iter_gemini_sse(resp):
-            append_upstream_event(turn, {'type': 'gemini_chunk', 'data': gemini_chunk})
+            if _is_verbose():
+                append_upstream_event(turn, {'type': 'gemini_chunk', 'data': gemini_chunk})
             usage_meta = gemini_chunk.get('usageMetadata') if isinstance(gemini_chunk, dict) else None
             if isinstance(usage_meta, dict):
                 last_usage = {
@@ -464,7 +474,8 @@ def _handle_gemini_stream(
             for cc_chunk in converter.process_chunk(gemini_chunk):
                 cc_chunk['model'] = ctx.client_model
                 client_chunks.append(cc_chunk)
-                append_client_event(turn, {'type': 'chat_chunk', 'data': cc_chunk})
+                if _is_verbose():
+                    append_client_event(turn, {'type': 'chat_chunk', 'data': cc_chunk})
                 if isinstance(cc_chunk, dict) and isinstance(cc_chunk.get('usage'), dict):
                     last_usage = cc_chunk['usage']
                 yield sse_data_message(cc_chunk)
@@ -561,7 +572,8 @@ def _handle_anthropic_stream(
         client_chunks: list[Any] = []
         last_usage: dict[str, Any] | None = None
         for event_type, event_data in iter_anthropic_sse(resp):
-            append_upstream_event(turn, {'type': event_type, 'data': event_data})
+            if _is_verbose():
+                append_upstream_event(turn, {'type': event_type, 'data': event_data})
             if event_type == 'message_start':
                 message_usage = event_data.get('message', {}).get('usage', {})
                 if isinstance(message_usage, dict):
@@ -594,7 +606,8 @@ def _handle_anthropic_stream(
                     pass
 
                 client_chunks.append(chunk_str)
-                append_client_event(turn, {'type': 'chat_chunk', 'data': chunk_str})
+                if _is_verbose():
+                    append_client_event(turn, {'type': 'chat_chunk', 'data': chunk_str})
                 yield sse_data_message(chunk_str)
 
             event_count += 1
