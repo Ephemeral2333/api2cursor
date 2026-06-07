@@ -88,9 +88,7 @@ def save(data):
 def get():
     """获取当前配置副本，必要时自动加载。"""
     with _lock:
-        if _cache is None:
-            pass
-        else:
+        if _cache is not None:
             return copy.deepcopy(_cache)
     return load()
 

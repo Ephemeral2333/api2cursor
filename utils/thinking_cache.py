@@ -23,7 +23,7 @@ _TTL = 86400  # 24 hours
 
 
 class ThinkingCache:
-    """纯内存 thinking 缓存，TTL 2 小时。"""
+    """纯内存 thinking 缓存，TTL 24 小时。"""
 
     def __init__(self):
         self._store: dict[str, tuple[str, float]] = {}
@@ -52,16 +52,21 @@ class ThinkingCache:
         self,
         messages: list[dict[str, Any]],
         reasoning_content: str,
+        assistant_msg: dict[str, Any] | None = None,
     ) -> None:
-        """将响应中的 thinking 内容存入缓存。"""
+        """将响应中的 thinking 内容存入缓存。
+
+        assistant_msg 应传入上游返回的完整 assistant 消息，用于生成与
+        下一轮 inject() 查找时相同的 key。不传则退化为空消息 hash（仅向后兼容）。
+        """
         if not reasoning_content:
             return
         sid = self._session_id(messages)
         if not sid:
             return
 
-        fake_msg: dict[str, Any] = {'role': 'assistant', 'content': '', 'tool_calls': []}
-        key = sid + ':' + self._message_hash(fake_msg)
+        msg = assistant_msg if assistant_msg is not None else {'role': 'assistant', 'content': '', 'tool_calls': []}
+        key = sid + ':' + self._message_hash(msg)
         self._store[key] = (reasoning_content, time.time())
         self._cleanup()
 

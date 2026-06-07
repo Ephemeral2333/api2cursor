@@ -660,6 +660,7 @@ def _finalize_chat_response(
             thinking_cache.store_from_response(
                 request.get_json(silent=True, force=True).get('messages', []),
                 msg['reasoning_content'],
+                assistant_msg=msg,
             )
             break
 

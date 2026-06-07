@@ -6,6 +6,7 @@
   - /api/admin/*   — 管理面板 CRUD 接口（设置、中转站 CRUD、模型映射 CRUD）
 """
 
+import hmac
 import json
 import os
 import logging
@@ -69,7 +70,7 @@ def admin_login():
     data = request.get_json(force=True)
     if not Config.ACCESS_API_KEY:
         return jsonify({'ok': True, 'message': '未设置访问密钥'})
-    if data.get('key', '') == Config.ACCESS_API_KEY:
+    if hmac.compare_digest(data.get('key', ''), Config.ACCESS_API_KEY):
         return jsonify({'ok': True})
     return jsonify({'ok': False, 'message': '密钥错误'}), 401
 
@@ -334,7 +335,7 @@ def _check_auth():
         return None
     auth = request.headers.get('Authorization', '')
     token = auth[7:] if auth.startswith('Bearer ') else request.headers.get('x-api-key', '')
-    if token != Config.ACCESS_API_KEY:
+    if not hmac.compare_digest(token, Config.ACCESS_API_KEY):
         return jsonify({'error': '未授权'}), 401
     return None
 

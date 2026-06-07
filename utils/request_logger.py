@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import threading
+import time
 from datetime import datetime
 from typing import Any
 
@@ -24,8 +25,8 @@ from utils.http import gen_id
 logger = logging.getLogger(__name__)
 
 _LOG_DIR = os.path.join(DATA_DIR, 'conversations')
-_LOCKS: dict[str, threading.Lock] = {}
-_LOCKS_GUARD = threading.Lock()
+_NUM_LOCK_SHARDS = 64
+_LOCK_SHARDS = [threading.Lock() for _ in range(_NUM_LOCK_SHARDS)]
 _STREAM_KEEP_HEAD = 12
 _STREAM_KEEP_TAIL = 12
 
@@ -64,6 +65,7 @@ def start_turn(
         'relay_source': relay_source,
         'started_at': now,
         'updated_at': now,
+        '_perf_ts': time.monotonic(),
         'request_headers': sanitize_headers(request_headers or {}),
         'client_request': deep_copy_jsonable(client_request),
         'metadata': deep_copy_jsonable(metadata or {}),
@@ -157,14 +159,14 @@ def finalize_turn(
     turn: dict[str, Any] | None,
     *,
     usage: dict[str, Any] | None = None,
-    duration_ms: int = 0,
 ) -> None:
     """将 turn 追加/更新到对应的会话日志文件。"""
     if turn is None or settings.get_debug_mode() != 'verbose':
         return
 
     turn['updated_at'] = datetime.utcnow().isoformat() + 'Z'
-    turn['duration_ms'] = duration_ms
+    perf_ts = turn.pop('_perf_ts', None)
+    turn['duration_ms'] = int((time.monotonic() - perf_ts) * 1000) if perf_ts is not None else 0
     if usage is not None:
         turn['usage'] = deep_copy_jsonable(usage)
 
@@ -249,10 +251,8 @@ def _write_turn(turn: dict[str, Any]) -> None:
 
 
 def _get_lock(conversation_id: str) -> threading.Lock:
-    with _LOCKS_GUARD:
-        if conversation_id not in _LOCKS:
-            _LOCKS[conversation_id] = threading.Lock()
-        return _LOCKS[conversation_id]
+    idx = int(hashlib.md5(conversation_id.encode()).hexdigest(), 16) % _NUM_LOCK_SHARDS
+    return _LOCK_SHARDS[idx]
 
 
 def _append_stream_event(stream_trace: dict[str, Any], kind: str, event: Any) -> None:
@@ -424,28 +424,6 @@ def _root_seed_from_responses_items(items: list[Any]) -> str:
         seed_parts.append(first_assistant)
     return json.dumps(seed_parts, ensure_ascii=False, separators=(',', ':'))
 
-
-def _normalize_messages_seed(messages: Any) -> str:
-    if not isinstance(messages, list):
-        return ''
-    normalized: list[dict[str, Any]] = []
-    for msg in messages:
-        if not isinstance(msg, dict):
-            continue
-        normalized.append({
-            'role': msg.get('role', ''),
-            'content': _normalize_content(msg.get('content')),
-            'tool_call_id': msg.get('tool_call_id', ''),
-            'tool_calls': [
-                {
-                    'id': tc.get('id', ''),
-                    'name': (tc.get('function') or {}).get('name', ''),
-                }
-                for tc in msg.get('tool_calls', [])
-                if isinstance(tc, dict)
-            ],
-        })
-    return json.dumps(normalized, ensure_ascii=False, separators=(',', ':'))
 
 
 def _normalize_content(content: Any) -> Any:

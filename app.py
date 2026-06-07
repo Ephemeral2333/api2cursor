@@ -6,6 +6,7 @@
   - 配置全局鉴权中间件
 """
 
+import hmac
 import logging
 
 from flask import Flask, jsonify, request
@@ -74,7 +75,7 @@ def create_app():
 
         auth = request.headers.get('Authorization', '')
         token = auth[7:] if auth.startswith('Bearer ') else request.headers.get('x-api-key', '')
-        if token != Config.ACCESS_API_KEY:
+        if not hmac.compare_digest(token, Config.ACCESS_API_KEY):
             logger.warning(f'鉴权拒绝: {request.path}')
             return jsonify({
                 'error': {'message': 'API 密钥无效', 'type': 'authentication_error'}
